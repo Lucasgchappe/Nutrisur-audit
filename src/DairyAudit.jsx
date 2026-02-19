@@ -131,16 +131,19 @@ const Icon = ({ name, size = 20, color = "currentColor" }) => {
     wind: <path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2" />,
     sun: <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41M12 6a6 6 0 100 12 6 6 0 000-12z" />,
     layers: <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />,
-  };
+      filter: <path d="M3 4h18l-7 8v5l-4 2V12L3 4z" />,
+    calendar: <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />,
+    compare: <path d="M9 5l7 7-7 7" />,
+};
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{icons[name]}</svg>);
 };
 
 // ─── Styles ───
 const C = {
-  bg: "#F5F0EB", card: "#FFFFFF", primary: "#2D6A4F", primaryLight: "#40916C", primaryDark: "#1B4332",
-  accent: "#E76F51", accentLight: "#F4A261", text: "#264653", textLight: "#6B7280",
-  border: "#D1C7BD", borderLight: "#E8E2DB", success: "#2D6A4F", warning: "#E9C46A",
-  danger: "#E76F51", inputBg: "#FAFAF8",
+  bg: "#F0F4F8", card: "#FFFFFF", primary: "#1565C0", primaryLight: "#1976D2", primaryDark: "#0D47A1",
+  accent: "#E76F51", accentLight: "#F4A261", text: "#1E3A5F", textLight: "#5C7A9A",
+  border: "#B8CCE0", borderLight: "#D6E4F0", success: "#1B6B3A", warning: "#E9A000",
+  danger: "#C62828", inputBg: "#F7FAFD",
 };
 const ff = "'DM Sans', 'Nunito', system-ui, sans-serif";
 
@@ -1276,6 +1279,507 @@ const CATEGORIES = [
   { id: "estres_calorico", name: "Verano / Estrés Calórico", icon: "sun", color: "#DC2626", sections: ESTRES_CALORICO_SECTIONS },
 ];
 
+// ═══════════════════════════════════════════════════
+// VISIT SUMMARY EXTRACTOR
+// Extrae un resumen compacto de visit.data para mostrar
+// en el historial sin abrir el detalle completo.
+// ═══════════════════════════════════════════════════
+const extractVisitSummary = (visit, category) => {
+  const d = visit.data || {};
+  const snippets = [];
+  const kpis = [];
+
+  if (!category) return { snippets: ["Sin categoría"], kpis: [] };
+
+  // 1) Buscar hallazgos / observaciones principales (texto)
+  const hallazgoKeys = [
+    "hallazgos_principales", "fr_hallazgos", "cama_hallazgos",
+    "ali_hallazgos", "ec_hallazgos",
+  ];
+  for (const k of hallazgoKeys) {
+    if (d[k]) {
+      const txt = String(d[k]).trim();
+      snippets.push(txt.length > 120 ? txt.slice(0, 120) + "…" : txt);
+      break; // solo el primero
+    }
+  }
+
+  // ═══════════════════════════════════════════════════
+// VISIT COMPARE — Δ entre 2 visitas del mismo módulo
+// ═══════════════════════════════════════════════════
+const VisitCompare = ({ visitA, visitB, category }) => {
+  // visitA = más reciente, visitB = anterior
+  if (!visitA || !visitB || !category) return null;
+  const dA = visitA.data || {};
+  const dB = visitB.data || {};
+
+  // Recolectar todos los campos numéricos de las secciones
+  const numericDiffs = [];
+  const selectDiffs = [];
+
+  category.sections.forEach(sec => {
+    sec.fields.forEach(f => {
+      const valA = dA[f.id];
+      const valB = dB[f.id];
+      if (valA == null && valB == null) return;
+
+      if (f.type === "number") {
+        const nA = parseFloat(valA);
+        const nB = parseFloat(valB);
+        if (!isNaN(nA) && !isNaN(nB) && nA !== nB) {
+          const delta = round(nA - nB, 2);
+          numericDiffs.push({
+            label: f.label,
+            prev: nB,
+            curr: nA,
+            delta,
+            unit: f.unit || "",
+            positive: delta > 0,
+          });
+        }
+      } else if (f.type === "select" && valA && valB && valA !== valB) {
+        selectDiffs.push({ label: f.label, prev: valB, curr: valA });
+      }
+    });
+
+    // Compare cow score averages
+    if (sec.customComponent?.startsWith("cowscore_")) {
+      const csA = dA[`${sec.id}_cowscore`];
+      const csB = dB[`${sec.id}_cowscore`];
+      if (csA?.cows?.length && csB?.cows?.length) {
+        const avgA = csA.cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+        const avgB = csB.cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+        if (avgA.length && avgB.length) {
+          const mA = round(avgA.reduce((s, v) => s + v, 0) / avgA.length, 2);
+          const mB = round(avgB.reduce((s, v) => s + v, 0) / avgB.length, 2);
+          if (mA !== mB) {
+            numericDiffs.push({
+              label: sec.title + " (prom.)",
+              prev: mB, curr: mA,
+              delta: round(mA - mB, 2),
+              unit: "", positive: mA > mB,
+            });
+          }
+        }
+      }
+    }
+
+    // Compare ketosis prevalence
+    if (sec.customComponent === "ketosis") {
+      const kA = dA[`${sec.id}_ketosis`];
+      const kB = dB[`${sec.id}_ketosis`];
+      if (kA?.cows?.length && kB?.cows?.length) {
+        const prevA = round(kA.cows.filter(c => c.positivo).length / kA.cows.length * 100, 1);
+        const prevB = round(kB.cows.filter(c => c.positivo).length / kB.cows.length * 100, 1);
+        if (prevA !== prevB) {
+          numericDiffs.push({
+            label: "Prevalencia cetosis",
+            prev: prevB, curr: prevA,
+            delta: round(prevA - prevB, 1),
+            unit: "%",
+            positive: prevA < prevB, // lower is better
+          });
+        }
+      }
+    }
+  });
+
+  if (numericDiffs.length === 0 && selectDiffs.length === 0) {
+    return (
+      <div style={{ padding: "16px 20px", background: C.bg, borderRadius: 10, textAlign: "center", color: C.textLight, fontSize: 14 }}>
+        No se encontraron diferencias comparables entre las dos visitas.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.borderLight}`, overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", background: C.primaryDark, color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontWeight: 700, fontSize: 14 }}>Comparación entre visitas</span>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>{fmt(visitB.fecha)} → {fmt(visitA.fecha)}</span>
+      </div>
+
+      {numericDiffs.length > 0 && (
+        <div style={{ padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.textLight, marginBottom: 10 }}>Valores numéricos (Δ)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+            {numericDiffs.map((d, i) => (
+              <div key={i} style={{ padding: "10px 12px", background: C.bg, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 12, color: C.textLight, marginBottom: 2 }}>{d.label}</div>
+                  <div style={{ fontSize: 12, color: C.textLight }}>
+                    <span>{d.prev}{d.unit}</span>
+                    <span style={{ margin: "0 6px", color: C.border }}>→</span>
+                    <span style={{ fontWeight: 600, color: C.text }}>{d.curr}{d.unit}</span>
+                  </div>
+                </div>
+                <div style={{
+                  padding: "4px 10px", borderRadius: 6, fontWeight: 700, fontSize: 14,
+                  background: d.positive ? C.success + "15" : C.danger + "15",
+                  color: d.positive ? C.success : C.danger,
+                }}>
+                  {d.delta > 0 ? "+" : ""}{d.delta}{d.unit}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {selectDiffs.length > 0 && (
+        <div style={{ padding: "0 16px 16px" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.textLight, marginBottom: 10 }}>Cambios categóricos</div>
+          {selectDiffs.map((d, i) => (
+            <div key={i} style={{ padding: "8px 12px", background: C.bg, borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
+              <span style={{ fontWeight: 600, color: C.text }}>{d.label}: </span>
+              <span style={{ color: C.textLight, textDecoration: "line-through" }}>{d.prev}</span>
+              <span style={{ margin: "0 6px", color: C.border }}>→</span>
+              <span style={{ fontWeight: 600, color: C.primary }}>{d.curr}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+  // 2) Buscar acciones priorizadas
+  const accionKeys = [
+    "acciones_priorizadas", "fr_acciones", "cama_acciones",
+    "ali_acciones", "ec_acciones",
+  ];
+  for (const k of accionKeys) {
+    if (d[k]) {
+      const lines = String(d[k]).split("\n").filter(l => l.trim());
+      kpis.push({ label: "Acciones", value: `${lines.length}`, color: C.accent });
+      break;
+    }
+  }
+
+  // 3) BCS promedio (preparto o frescas)
+  for (const sec of category.sections) {
+    if (sec.customComponent === "cowscore_bcs") {
+      const cs = d[`${sec.id}_cowscore`];
+      if (cs?.cows?.length) {
+        const scores = cs.cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+        if (scores.length) {
+          const avg = round(scores.reduce((s, v) => s + v, 0) / scores.length, 2);
+          kpis.push({ label: "BCS prom.", value: avg, color: avg >= 3.0 && avg <= 3.5 ? C.success : C.accent });
+        }
+      }
+    }
+  }
+
+  // 4) Cetosis prevalencia
+  for (const sec of category.sections) {
+    if (sec.customComponent === "ketosis") {
+      const kt = d[`${sec.id}_ketosis`];
+      if (kt?.cows?.length) {
+        const pos = kt.cows.filter(c => c.positivo).length;
+        const prev = round(pos / kt.cows.length * 100, 1);
+        kpis.push({ label: "Cetosis", value: `${prev}%`, color: prev > 15 ? C.danger : prev > 10 ? C.warning : C.success });
+      }
+    }
+  }
+
+  // 5) Enfermedades — incidencias altas
+  for (const sec of category.sections) {
+    if (sec.customComponent === "diseases") {
+      const dis = d[`${sec.id}_diseases`];
+      if (dis?.paridas_ventana) {
+        const dIds = ["da", "hipocalcemia", "rp", "metritis", "cetosis_cl", "mastitis", "neumonia", "cojera"];
+        let alertCount = 0;
+        dIds.forEach(dId => {
+          const inc = parseFloat(dis[`${dId}_incidencia`]) || 0;
+          if (inc > 10) alertCount++;
+        });
+        if (alertCount > 0) kpis.push({ label: "Enf. altas", value: alertCount, color: C.danger });
+      }
+    }
+  }
+
+  // 6) Producción a 14 DIM
+  if (d.fr_prod_14dim) {
+    kpis.push({ label: "Lt 14DIM", value: d.fr_prod_14dim, color: C.primary });
+  }
+
+  // 7) ITH
+  if (d.ec_ith) {
+    const ith = parseFloat(d.ec_ith);
+    kpis.push({ label: "ITH", value: ith, color: ith > 80 ? C.danger : ith > 72 ? C.warning : C.success });
+  }
+
+  // 8) CMS / DMI
+  if (d.cms_oferta_kg || d.fr_dmi_oferta) {
+    const val = d.fr_dmi_oferta || d.cms_oferta_kg;
+    kpis.push({ label: "CMS", value: `${val} kg`, color: C.primary });
+  }
+
+  // 9) Ingredientes count
+  for (const sec of category.sections) {
+    if (sec.customComponent === "ingredients") {
+      const ings = d[`${sec.id}_ingredients`];
+      if (ings?.length) {
+        const totalMS = ings.reduce((s, i) => s + (parseFloat(i.kg_ms) || 0), 0);
+        if (totalMS > 0) kpis.push({ label: "Dieta kgMS", value: round(totalMS, 1), color: C.primaryLight });
+        break;
+      }
+    }
+  }
+
+  // Fallback si no hay snippets
+  if (snippets.length === 0) {
+    // Contar campos con datos
+    let filled = 0;
+    for (const sec of category.sections) {
+      sec.fields.forEach(f => { if (d[f.id]) filled++; });
+    }
+    snippets.push(filled > 0 ? `${filled} campos completados` : "Visita sin datos cargados");
+  }
+
+  return { snippets, kpis };
+};
+
+// ═══════════════════════════════════════════════════
+// VISIT HISTORY PANEL — Filtros + Timeline + Expand
+// Se usa dentro de ClientDetail en vez del listado plano
+// ═══════════════════════════════════════════════════
+const VisitHistoryPanel = ({
+  visits,
+  onView, onEdit, onDelete,
+  onDownloadTxt, onDownloadCsv,
+}) => {
+  const [filterCat, setFilterCat] = useState("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterText, setFilterText] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+  const [compareVisitId, setCompareVisitId] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Categorías presentes en las visitas de este cliente
+  const presentCats = useMemo(() => {
+    const ids = new Set(visits.map(v => v.categoryId));
+    return CATEGORIES.filter(c => ids.has(c.id));
+  }, [visits]);
+
+  // Filtrado
+  const filtered = useMemo(() => {
+    return visits.filter(v => {
+      if (filterCat !== "all" && v.categoryId !== filterCat) return false;
+      if (filterDateFrom && v.fecha < filterDateFrom) return false;
+      if (filterDateTo && v.fecha > filterDateTo) return false;
+      if (filterText) {
+        const q = filterText.toLowerCase();
+        const d = v.data || {};
+        const cat = CATEGORIES.find(c => c.id === v.categoryId);
+        const catName = cat?.name?.toLowerCase() || "";
+        const tecnico = (v.tecnico || "").toLowerCase();
+        // Buscar en hallazgos, acciones, notas
+        const haystack = [
+          catName, tecnico,
+          d.hallazgos_principales, d.fr_hallazgos, d.cama_hallazgos, d.ali_hallazgos, d.ec_hallazgos,
+          d.acciones_priorizadas, d.fr_acciones, d.cama_acciones, d.ali_acciones, d.ec_acciones,
+          d.notas_adicionales, d.fr_notas,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [visits, filterCat, filterDateFrom, filterDateTo, filterText]);
+
+  // Agrupar por mes para timeline
+  const grouped = useMemo(() => {
+    const map = {};
+    filtered.forEach(v => {
+      const key = v.fecha ? v.fecha.slice(0, 7) : "sin-fecha"; // YYYY-MM
+      if (!map[key]) map[key] = [];
+      map[key].push(v);
+    });
+    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filtered]);
+
+  const monthLabel = (ym) => {
+    if (ym === "sin-fecha") return "Sin fecha";
+    const [y, m] = ym.split("-");
+    const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    return `${months[parseInt(m) - 1]} ${y}`;
+  };
+
+  // Para comparar: buscar visita anterior del mismo módulo
+  const findPrevVisit = (visit) => {
+    const sameCat = visits
+      .filter(v => v.categoryId === visit.categoryId && v.id !== visit.id && v.fecha <= visit.fecha)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha));
+    return sameCat[0] || null;
+  };
+
+  const activeFilters = (filterCat !== "all" ? 1 : 0) + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0) + (filterText ? 1 : 0);
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 18, display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="clipboard" size={20} color={C.primary} />
+          Historial de visitas
+          <span style={{ fontSize: 13, fontWeight: 400, color: C.textLight }}>({filtered.length}{filtered.length !== visits.length ? ` de ${visits.length}` : ""})</span>
+        </h3>
+        <Btn
+          variant={showFilters ? "primary" : "outline"}
+          size="sm"
+          icon="filter"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          Filtros{activeFilters > 0 ? ` (${activeFilters})` : ""}
+        </Btn>
+      </div>
+
+      {/* Filters panel */}
+      {showFilters && (
+        <Card style={{ marginBottom: 16, padding: 16, background: C.bg, border: `1.5px solid ${C.primary}20` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Módulo</label>
+              <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ ...inputStyle, fontSize: 13, padding: "8px 10px", cursor: "pointer" }}>
+                <option value="all">Todos los módulos</option>
+                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Desde</label>
+              <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={{ ...inputStyle, fontSize: 13, padding: "8px 10px" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Hasta</label>
+              <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={{ ...inputStyle, fontSize: 13, padding: "8px 10px" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Buscar en notas</label>
+              <input type="text" placeholder="Buscar..." value={filterText} onChange={e => setFilterText(e.target.value)} style={{ ...inputStyle, fontSize: 13, padding: "8px 10px" }} />
+            </div>
+          </div>
+          {activeFilters > 0 && (
+            <div style={{ marginTop: 10, textAlign: "right" }}>
+              <Btn variant="ghost" size="sm" onClick={() => { setFilterCat("all"); setFilterDateFrom(""); setFilterDateTo(""); setFilterText(""); }}>
+                Limpiar filtros
+              </Btn>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Category quick-filter pills (always visible) */}
+      {presentCats.length > 1 && !showFilters && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+          <button onClick={() => setFilterCat("all")} style={{
+            padding: "5px 12px", fontSize: 12, fontWeight: 600, fontFamily: ff, borderRadius: 16, border: "none", cursor: "pointer",
+            background: filterCat === "all" ? C.primary : C.borderLight, color: filterCat === "all" ? "#fff" : C.text,
+          }}>Todos</button>
+          {presentCats.map(c => (
+            <button key={c.id} onClick={() => setFilterCat(filterCat === c.id ? "all" : c.id)} style={{
+              padding: "5px 12px", fontSize: 12, fontWeight: 600, fontFamily: ff, borderRadius: 16, border: "none", cursor: "pointer",
+              background: filterCat === c.id ? c.color : c.color + "15", color: filterCat === c.id ? "#fff" : c.color,
+            }}>{c.name}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {filtered.length === 0 && (
+        <Card style={{ textAlign: "center", padding: 40 }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
+          <p style={{ color: C.textLight, margin: 0 }}>
+            {visits.length === 0 ? "Sin visitas registradas aún." : "No hay visitas que coincidan con los filtros."}
+          </p>
+        </Card>
+      )}
+
+      {/* Timeline grouped by month */}
+      {grouped.map(([ym, monthVisits]) => (
+        <div key={ym} style={{ marginBottom: 20 }}>
+          {/* Month label */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.primary }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: 0.5 }}>{monthLabel(ym)}</span>
+            <div style={{ flex: 1, height: 1, background: C.borderLight }} />
+            <span style={{ fontSize: 12, color: C.textLight }}>{monthVisits.length} visita{monthVisits.length > 1 ? "s" : ""}</span>
+          </div>
+
+          {/* Visit cards */}
+          {monthVisits.map(v => {
+            const cat = CATEGORIES.find(c => c.id === v.categoryId);
+            const isExpanded = expandedId === v.id;
+            const summary = extractVisitSummary(v, cat);
+            const prevVisit = findPrevVisit(v);
+            const isComparing = compareVisitId === v.id;
+
+            return (
+              <div key={v.id} style={{ marginLeft: 4, borderLeft: `3px solid ${cat?.color || C.primary}25`, paddingLeft: 16, marginBottom: 8 }}>
+                <Card style={{ padding: 14, borderLeft: `4px solid ${cat?.color || C.primary}` }}>
+                  {/* Card header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <Badge color={cat?.color}>{cat?.name || v.categoryId}</Badge>
+                        <span style={{ fontSize: 13, color: C.textLight }}>{fmt(v.fecha)}</span>
+                        <span style={{ fontSize: 12, color: C.textLight + "80" }}>— {v.tecnico}</span>
+                      </div>
+
+                      {/* KPI pills */}
+                      {summary.kpis.length > 0 && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                          {summary.kpis.map((kpi, i) => (
+                            <span key={i} style={{
+                              display: "inline-flex", alignItems: "center", gap: 4,
+                              padding: "2px 8px", borderRadius: 12, fontSize: 12, fontWeight: 600,
+                              background: kpi.color + "15", color: kpi.color,
+                            }}>
+                              {kpi.label}: {kpi.value}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Snippet */}
+                      {summary.snippets.map((s, i) => (
+                        <p key={i} style={{ fontSize: 13, color: C.textLight, margin: 0, lineHeight: 1.4 }}>{s}</p>
+                      ))}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
+                      <Btn variant="outline" size="sm" icon="eye" onClick={() => onView(v, cat)}>Ver</Btn>
+                      <Btn variant="ghost" size="sm" icon="edit" onClick={() => onEdit(v, cat)} />
+                      <Btn variant="ghost" size="sm" icon="download" onClick={() => onDownloadTxt(v)} title="Descargar TXT" />
+                      {prevVisit && (
+                        <Btn
+                          variant={isComparing ? "primary" : "ghost"}
+                          size="sm"
+                          icon="compare"
+                          onClick={() => setCompareVisitId(isComparing ? null : v.id)}
+                          title="Comparar con visita anterior"
+                        >Δ</Btn>
+                      )}
+                      <Btn variant="ghost" size="sm" icon="trash" onClick={() => onDelete(v)} style={{ color: C.danger }} />
+                    </div>
+                  </div>
+
+                  {/* Comparison panel (inline) */}
+                  {isComparing && prevVisit && (
+                    <div style={{ marginTop: 12 }}>
+                      <VisitCompare visitA={v} visitB={prevVisit} category={cat} />
+                    </div>
+                  )}
+                </Card>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════
 // REPORT GENERATION
@@ -1464,6 +1968,185 @@ const downloadFile = (content, filename, mime) => {
   a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
 };
 
+const generateHTMLReport = (visit, client, category) => {
+  const d = visit.data || {};
+  const accentColor = category.color || "#1565C0";
+
+  const sectionHTML = category.sections.map(sec => {
+    const fields = sec.fields.filter(f => d[f.id]);
+    const hasCustom = sec.customComponent;
+
+    let customContent = "";
+
+    if (sec.customComponent === "ingredients") {
+      const ings = d[`${sec.id}_ingredients`] || [];
+      if (ings.length) {
+        const totalTC = round(ings.reduce((s, i) => s + (parseFloat(i.kg_tal_cual) || 0), 0), 1);
+        const totalMS = round(ings.reduce((s, i) => s + (parseFloat(i.kg_ms) || 0), 0), 1);
+        const rows = ings.map(i => `<tr><td>${i.name}</td><td style="text-align:right">${i.kg_tal_cual || "—"}</td><td style="text-align:center">${i.ms_pct}%</td><td style="text-align:right">${i.kg_ms || "—"}</td></tr>`).join("");
+        customContent = `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+          <thead><tr style="background:${accentColor}15"><th style="padding:6px 8px;text-align:left">Ingrediente</th><th style="padding:6px 8px;text-align:right">kg TC</th><th style="padding:6px 8px;text-align:center">%MS</th><th style="padding:6px 8px;text-align:right">kg MS</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr style="background:${accentColor}10;font-weight:700"><td style="padding:6px 8px">TOTAL</td><td style="padding:6px 8px;text-align:right">${totalTC} kg</td><td></td><td style="padding:6px 8px;text-align:right">${totalMS} kg MS</td></tr></tfoot>
+        </table>`;
+      }
+    }
+
+    if (sec.customComponent?.startsWith("cowscore_")) {
+      const cs = d[`${sec.id}_cowscore`];
+      if (cs?.cows?.length) {
+        const scores = cs.cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+        const n = scores.length;
+        if (n > 0) {
+          const avg = round(scores.reduce((s, v) => s + v, 0) / n, 2);
+          const min = Math.min(...scores);
+          const max = Math.max(...scores);
+          const pctFuera = round(scores.filter(v => {
+            const cfg = sec.customComponent === "cowscore_bcs" ? [3.0, 3.5] : sec.customComponent === "cowscore_heces" ? [3.0, 3.5] : [3.5, 4.5];
+            return v < cfg[0] || v > cfg[1];
+          }).length / n * 100, 1);
+          customContent = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+            <div style="padding:10px 16px;background:${accentColor}10;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:${accentColor}">${avg}</div><div style="font-size:11px;color:#666">Promedio</div></div>
+            <div style="padding:10px 16px;background:#fff3e0;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#e65100">${min}</div><div style="font-size:11px;color:#666">Mínimo</div></div>
+            <div style="padding:10px 16px;background:#e8f5e9;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#2e7d32">${max}</div><div style="font-size:11px;color:#666">Máximo</div></div>
+            <div style="padding:10px 16px;background:${pctFuera > 20 ? "#ffebee" : "#e8f5e9"};border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:${pctFuera > 20 ? "#c62828" : "#2e7d32"}">${pctFuera}%</div><div style="font-size:11px;color:#666">Fuera objetivo</div></div>
+            <div style="padding:10px 16px;background:#f5f5f5;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#333">${n}</div><div style="font-size:11px;color:#666">Evaluadas</div></div>
+          </div>`;
+        }
+      }
+    }
+
+    if (sec.customComponent === "ketosis") {
+      const kt = d[`${sec.id}_ketosis`];
+      if (kt?.cows?.length) {
+        const pos = kt.cows.filter(c => c.positivo).length;
+        const prev = round(pos / kt.cows.length * 100, 1);
+        const color = prev > 15 ? "#c62828" : prev > 10 ? "#e65100" : "#2e7d32";
+        customContent = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+          <div style="padding:10px 16px;background:#f5f5f5;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#333">${kt.cows.length}</div><div style="font-size:11px;color:#666">Testeadas</div></div>
+          <div style="padding:10px 16px;background:${pos > 0 ? "#ffebee" : "#e8f5e9"};border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:${pos > 0 ? "#c62828" : "#2e7d32"}">${pos}</div><div style="font-size:11px;color:#666">Positivas</div></div>
+          <div style="padding:10px 16px;background:${prev > 15 ? "#ffebee" : "#e8f5e9"};border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:${color}">${prev}%</div><div style="font-size:11px;color:#666">Prevalencia</div></div>
+        </div>
+        <p style="margin-top:8px;padding:8px 12px;border-radius:6px;font-size:13px;background:${prev > 15 ? "#ffebee" : "#e8f5e9"};color:${color};font-weight:600">
+          ${prev > 15 ? "⚠️ Prevalencia alta (>15%). Revisar dieta de transición y balance energético." : prev > 10 ? "⚡ Prevalencia moderada (10-15%). Monitorear de cerca." : "✅ Prevalencia dentro del objetivo (<10%). Buen resultado."}
+        </p>`;
+      }
+    }
+
+    if (sec.customComponent === "diseases") {
+      const dis = d[`${sec.id}_diseases`];
+      if (dis?.paridas_ventana) {
+        const dNames = { da: "DA (Desplaz. Abomaso)", hipocalcemia: "Hipocalcemia clínica", rp: "Retención placentaria", metritis: "Metritis", cetosis_cl: "Cetosis clínica", mastitis: "Mastitis clínica", neumonia: "Neumonía", cojera: "Cojera" };
+        const refs = { da: 5, hipocalcemia: 5, rp: 8, metritis: 10, cetosis_cl: 5, mastitis: 2, neumonia: 2, cojera: 5 };
+        const rows = Object.entries(dNames).filter(([id]) => dis[`${id}_casos`]).map(([id, label]) => {
+          const inc = parseFloat(dis[`${id}_incidencia`]) || 0;
+          const ref = refs[id] || 10;
+          const bg = inc > ref * 1.5 ? "#ffebee" : inc > ref ? "#fff8e1" : "#e8f5e9";
+          const color = inc > ref * 1.5 ? "#c62828" : inc > ref ? "#e65100" : "#2e7d32";
+          return `<tr style="background:${bg}"><td style="padding:6px 10px">${label}</td><td style="padding:6px 10px;text-align:center">${dis[`${id}_casos`]}</td><td style="padding:6px 10px;text-align:center;font-weight:700;color:${color}">${dis[`${id}_incidencia`] || "?"}%</td><td style="padding:6px 10px;text-align:center;color:#888">&lt;${ref}%</td></tr>`;
+        }).join("");
+        if (rows) {
+          customContent = `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+            <thead><tr style="background:${accentColor}15"><th style="padding:6px 10px;text-align:left">Enfermedad</th><th style="padding:6px 10px;text-align:center">Casos</th><th style="padding:6px 10px;text-align:center">Incidencia</th><th style="padding:6px 10px;text-align:center">Referencia</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p style="margin-top:6px;font-size:12px;color:#666">Paridas en ventana: ${dis.paridas_ventana} | Período: ${dis.periodo_dias || "—"}</p>`;
+        }
+      }
+    }
+
+    if (fields.length === 0 && !customContent) return "";
+
+    const fieldRows = fields.map(f => {
+      const val = d[f.id];
+      if (!val) return "";
+      if (f.type === "textarea") {
+        return `<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:600;color:#666;margin-bottom:3px">${f.label}</div><div style="padding:8px 12px;background:#f9f9f9;border-radius:6px;font-size:14px;white-space:pre-wrap;border-left:3px solid ${accentColor}40">${val}</div></div>`;
+      }
+      return `<div style="display:inline-block;margin:4px 12px 4px 0"><span style="font-size:12px;color:#666">${f.label}: </span><span style="font-size:14px;font-weight:600;color:#1e3a5f">${val}${f.unit ? ` ${f.unit}` : ""}</span></div>`;
+    }).join("");
+
+    return `<div style="margin-bottom:20px;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;border-left:4px solid ${accentColor}">
+      <div style="background:${accentColor}08;padding:12px 16px;border-bottom:1px solid #f0f0f0">
+        <div style="font-weight:700;font-size:15px;color:#1e3a5f">${sec.title}</div>
+        <div style="font-size:12px;color:#888;margin-top:2px">${sec.subtitle}</div>
+      </div>
+      <div style="padding:14px 16px">
+        ${customContent}
+        ${fieldRows}
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informe NutriSur - ${client.nombre}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; color: #333; }
+  .page { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+  .header { background: linear-gradient(135deg, #0d47a1, #1565c0); color: #fff; padding: 32px 40px; }
+  .header h1 { margin: 0 0 4px; font-size: 26px; }
+  .header .subtitle { font-size: 14px; opacity: 0.85; }
+  .meta { display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; }
+  .meta-item { font-size: 13px; }
+  .meta-item span { display: block; opacity: 0.7; font-size: 11px; margin-bottom: 2px; }
+  .content { padding: 32px 40px; }
+  .category-badge { display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; color: ${accentColor}; background: ${accentColor}15; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border-bottom: 1px solid #f0f0f0; }
+  .footer { padding: 20px 40px; background: #f8f8f8; border-top: 1px solid #eee; font-size: 12px; color: #888; display: flex; justify-content: space-between; }
+  @media print { body { background: white; padding: 0; } .page { box-shadow: none; border-radius: 0; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:22px;font-weight:800;letter-spacing:1px;margin-bottom:4px">🐄 NutriSur</div>
+        <h1>${category.name}</h1>
+        <div class="subtitle">Informe de Visita Técnica</div>
+      </div>
+      <div style="text-align:right;font-size:13px;opacity:0.85">
+        <div style="font-size:18px;font-weight:700">${fmt(visit.fecha) || "—"}</div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="meta-item"><span>Productor</span>${client.nombre}</div>
+      <div class="meta-item"><span>Establecimiento</span>${client.establecimiento}</div>
+      ${client.localidad ? `<div class="meta-item"><span>Localidad</span>${client.localidad}</div>` : ""}
+      <div class="meta-item"><span>Técnico</span>${visit.tecnico || "—"}</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="category-badge">${category.name}</div>
+    ${sectionHTML}
+  </div>
+  <div class="footer">
+    <span>Generado por NutriSur · Sistema de Auditoría Lechera</span>
+    <span>${new Date().toLocaleString("es-UY")}</span>
+  </div>
+</div>
+</body>
+</html>`;
+};
+
+const makeDownloadReport = (currentClient, flashFn) => (visit, type) => {
+    const cat = CATEGORIES.find(c => c.id === visit.categoryId);
+    if (!cat || !currentClient) return flashFn("Error: falta info de categoría o cliente", "error");
+    const name = `NutriSur_${currentClient.nombre}_${cat.name}_${visit.fecha || "sin-fecha"}`.replace(/\s+/g, "_");
+    if (type === "txt") {
+      downloadFile(generateTextReport(visit, currentClient, cat), `${name}.txt`, "text/plain;charset=utf-8");
+    } else if (type === "html") {
+      downloadFile(generateHTMLReport(visit, currentClient, cat), `${name}.html`, "text/html;charset=utf-8");
+    } else {
+      downloadFile(generateCSV(visit, currentClient, cat), `${name}.csv`, "text/csv;charset=utf-8");
+    }
+  };
 // ═══════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════
@@ -1497,6 +2180,10 @@ useEffect(() => {
     if (sessionUser) setVw("dashboard");   // <- esto quizá lo ajustamos
     else setVw("login");
   });
+
+    const toggleSection = (secId) => {
+    setExpandedSections(prev => ({ ...prev, [secId]: prev[secId] === false ? true : false }));
+  };
 
   const { data: { subscription } } =
     supabase.auth.onAuthStateChange((_event, session) => {
@@ -1555,6 +2242,7 @@ const filteredClients = (clients || []).filter(c => {
   );
 });
   const flash = (t, type = "success") => { setMsg({ text: t, type }); setTimeout(() => setMsg(null), 3000); };
+  const downloadReport = makeDownloadReport(selClient, flash);
 const handleFieldChange = (key, value) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
@@ -1749,7 +2437,7 @@ const Toast = msg && (
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 32, color: "#fff" }}>
           <div style={{ fontSize: 48 }}>🐄</div>
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, margin: "8px 0 0", fontWeight: 400 }}>DairyAudit</h1>
+          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, margin: "8px 0 0", fontWeight: 700, letterSpacing: 1 }}>NutriSur</h1>
           <p style={{ fontSize: 14, opacity: 0.8 }}>Sistema de Auditoría Lechera</p>
         </div>
         <Card style={{ padding: 32 }}>
@@ -1765,13 +2453,13 @@ const Toast = msg && (
   );
 
   // ── LAYOUT ──
-  const Header = (<div style={{ background: C.primaryDark, color: "#fff", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}><style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap'); * { box-sizing: border-box; }`}</style><div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}><span style={{ fontSize: 24 }}>🐄</span><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20 }}>DairyAudit</span></div><div style={{ display: "flex", alignItems: "center", gap: 16 }}><span style={{ fontSize: 13, opacity: 0.8 }}>👤 {user.nombre}</span><Btn variant="ghost" size="sm" icon="logout" onClick={handleLogout} style={{ color: "#fff", opacity: 0.8 }}>Salir</Btn></div></div>);
+  const Header = (<div style={{ background: C.primaryDark, color: "#fff", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}><style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap'); * { box-sizing: border-box; }`}</style><div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}><span style={{ fontSize: 26 }}>🐄</span><div><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>NutriSur</span><span style={{ fontSize: 11, opacity: 0.7, marginLeft: 8, verticalAlign: "middle" }}>Auditoría Lechera</span></div></div><div style={{ display: "flex", alignItems: "center", gap: 16 }}><span style={{ fontSize: 13, opacity: 0.8 }}>👤 {user?.user_metadata?.nombre || user?.email || "Técnico"}</span><Btn variant="ghost" size="sm" icon="logout" onClick={handleLogout} style={{ color: "#fff", opacity: 0.8 }}>Salir</Btn></div></div>);
   const Nav = (<div style={{ display: "flex", gap: 8, padding: "16px 24px", background: C.bg, borderBottom: `1px solid ${C.borderLight}` }}><Btn variant={vw === "dashboard" ? "primary" : "outline"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); }}>Inicio</Btn><Btn variant={["clients", "clientDetail"].includes(vw) ? "primary" : "outline"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn></div>);
 
   // ── DASHBOARD ──
   const Dashboard = (
-    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, marginBottom: 4 }}>Buenos días, {user.nombre}</h2>
+    <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+      <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, marginBottom: 4 }}>Bienvenido, {user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</h2>
       <p style={{ color: C.textLight, marginBottom: 24, fontSize: 15 }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
         <Card style={{ textAlign: "center", background: `linear-gradient(135deg, ${C.primary}, ${C.primaryLight})`, color: "#fff", border: "none" }}><div style={{ fontSize: 32, fontWeight: 700 }}>{clients.length}</div><div style={{ fontSize: 13, opacity: 0.9 }}>Clientes</div></Card>
@@ -1787,7 +2475,7 @@ const Toast = msg && (
 
   // ── CLIENTS ──
   const ClientList = (
-    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+    <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, margin: 0 }}>Clientes</h2><Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>Nuevo Cliente</Btn></div>
       <input type="text" placeholder="Buscar..." value={searchQ} onChange={e => setSearchQ(e.target.value)} style={{ ...inputStyle, marginBottom: 20 }} />
       {filteredClients.length === 0 ? <Card style={{ textAlign: "center", padding: 40 }}><div style={{ fontSize: 40 }}>🐄</div><p style={{ color: C.textLight }}>No hay clientes aún.</p></Card>
@@ -1797,7 +2485,7 @@ const Toast = msg && (
 
   // ── NEW CLIENT ──
   const NewClient = (
-    <div style={{ padding: 24, maxWidth: 600, margin: "0 auto" }}>
+    <div style={{ padding: "24px 32px", maxWidth: 700, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clients")} style={{ marginBottom: 16 }}>Volver</Btn>
       <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, marginBottom: 20 }}>{clientForm.id ? "Editar Cliente" : "Nuevo Cliente"}</h2>
       <Card>
@@ -1844,8 +2532,9 @@ const fetchVisits = async (clientId) => {
 };
 
   // ── CLIENT DETAIL ──
+  co// ── CLIENT DETAIL ── (ENHANCED with VisitHistoryPanel)
   const ClientDetail = selClient && (
-    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+    <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => { setVw("clients"); setSelClient(null); }} style={{ marginBottom: 16 }}>Volver</Btn>
       <Card style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -1863,21 +2552,32 @@ const fetchVisits = async (clientId) => {
         ))}
       </div>
 
-      <h3 style={{ marginBottom: 12 }}>Historial de visitas</h3>
-      {visits.length === 0 ? <Card style={{ textAlign: "center", padding: 30 }}><p style={{ color: C.textLight }}>Sin visitas registradas.</p></Card>
-        : visits.map(v => {
-          const cat = CATEGORIES.find(c => c.id === v.categoryId);
-          return (<Card key={v.id} style={{ marginBottom: 10 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}><div style={{ display: "flex", alignItems: "center", gap: 12 }}><div style={{ width: 6, height: 40, borderRadius: 3, background: cat?.color || C.primary }} /><div><div style={{ fontWeight: 600 }}>{cat?.name}</div><div style={{ fontSize: 13, color: C.textLight }}>{fmt(v.fecha)} — {v.tecnico}</div></div></div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Btn variant="outline" size="sm" icon="eye" onClick={() => { setSelVisit(v); setSelCat(cat); setFormData({ _fecha: v.fecha, ...v.data }); const exp = {}; cat.sections.forEach(s => { exp[s.id] = true; }); setExpandedSections(exp); setVw("viewVisit"); }}>Ver</Btn><Btn variant="outline" size="sm" icon="edit" onClick={() => { setSelVisit(v); setSelCat(cat); setFormData({ _fecha: v.fecha, ...v.data }); const exp = {}; cat.sections.forEach(s => { exp[s.id] = true; }); setExpandedSections(exp); setVw("newVisit"); }}>Editar</Btn><Btn variant="ghost" size="sm" icon="download" onClick={() => downloadReport(v, "txt")}>TXT</Btn><Btn variant="ghost" size="sm" icon="download" onClick={() => downloadReport(v, "csv")}>CSV</Btn><Btn variant="danger" size="sm" icon="trash" onClick={() => deleteVisit(v)} /></div></div></Card>);
-        })}
+      {/* ═══ ENHANCED VISIT HISTORY ═══ */}
+      <VisitHistoryPanel
+        visits={visits}
+        onView={(v, cat) => {
+          setSelVisit(v); setSelCat(cat);
+          setFormData({ _fecha: v.fecha, ...v.data });
+          const exp = {}; cat.sections.forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
+          setVw("viewVisit");
+        }}
+        onEdit={(v, cat) => {
+          setSelVisit(v); setSelCat(cat);
+          setFormData({ _fecha: v.fecha, ...v.data });
+          const exp = {}; cat.sections.forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
+          setVw("newVisit");
+        }}
+        onDelete={(v) => deleteVisit(v)}
+        onDownloadTxt={(v) => downloadReport(v, "txt")}
+        onDownloadCsv={(v) => downloadReport(v, "csv")}
+      />
     </div>
   );
-  
- 
 
 
   // ── VISIT FORM ──
   const VisitForm = selCat && (
-    <div style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
+    <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clientDetail")} style={{ marginBottom: 16 }}>Volver</Btn>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
@@ -1891,7 +2591,7 @@ const fetchVisits = async (clientId) => {
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
           <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Fecha</label><input type="date" value={formData._fecha || today()} onChange={e => handleFieldChange("_fecha", e.target.value)} disabled={vw === "viewVisit"} style={{ padding: "8px 12px", fontSize: 14, border: `1.5px solid ${C.borderLight}`, borderRadius: 8, fontFamily: ff, outline: "none" }} /></div>
-          <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Técnico</label><span style={{ fontSize: 14, fontWeight: 500 }}>{user.nombre}</span></div>
+          <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Técnico</label><span style={{ fontSize: 14, fontWeight: 500 }}>{user?.user_metadata?.nombre || user?.email || "Técnico"}</span></div>
         </div>
       </Card>
 
@@ -1981,7 +2681,35 @@ const fetchVisits = async (clientId) => {
       })}
 
       {vw !== "viewVisit" && <div style={{ display: "flex", gap: 10, marginTop: 20, marginBottom: 40 }}><Btn icon="save" size="lg" onClick={saveVisit}>Guardar Visita</Btn><Btn variant="outline" size="lg" onClick={() => setVw("clientDetail")}>Cancelar</Btn></div>}
-      {vw === "viewVisit" && <div style={{ display: "flex", gap: 10, marginTop: 20, marginBottom: 40 }}><Btn icon="download" onClick={() => downloadReport(selVisit, "txt")}>Descargar TXT</Btn><Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "csv")}>Descargar CSV</Btn><Btn variant="outline" icon="edit" onClick={() => setVw("newVisit")}>Editar</Btn></div>}
+      {vw === "viewVisit" && (
+        <div style={{ display: "flex", gap: 10, marginTop: 20, marginBottom: 40, flexWrap: "wrap" }}>
+          <Btn icon="download" onClick={() => downloadReport(selVisit, "html")} style={{ background: C.primary }}>
+            Informe para Productor (HTML)
+          </Btn>
+          <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "txt")}>TXT</Btn>
+          <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "csv")}>CSV</Btn>
+          <Btn variant="outline" icon="edit" onClick={() => setVw("newVisit")}>Editar</Btn>
+        </div>
+      )}
+
+      {/* Botón flotante de guardado rápido */}
+      {vw !== "viewVisit" && (
+        <div style={{ position: "fixed", bottom: 28, right: 28, zIndex: 200 }}>
+          <button
+            onClick={saveVisit}
+            style={{
+              width: 60, height: 60, borderRadius: "50%", border: "none", cursor: "pointer",
+              background: C.primary, color: "#fff", boxShadow: "0 4px 16px rgba(21,101,192,0.5)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, fontWeight: 700, fontFamily: ff,
+              transition: "transform 0.15s, box-shadow 0.15s",
+            }}
+            title="Guardar visita"
+          >
+            <Icon name="save" size={24} color="#fff" />
+          </button>
+        </div>
+      )}
     </div>
   );
 
