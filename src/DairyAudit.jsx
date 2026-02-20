@@ -1560,14 +1560,15 @@ const VisitHistoryPanel = ({
 
   // Categorías presentes en las visitas de este cliente
   const presentCats = useMemo(() => {
-    const ids = new Set(visits.map(v => v.categoryId));
+    const ids = new Set(visits.map(v => v.categoryId || v.category_id));
     return CATEGORIES.filter(c => ids.has(c.id));
   }, [visits]);
 
   // Filtrado
   const filtered = useMemo(() => {
     return visits.filter(v => {
-      if (filterCat !== "all" && v.categoryId !== filterCat) return false;
+      const catId = v.categoryId || v.category_id;
+      if (filterCat !== "all" && catId !== filterCat) return false;
       if (filterDateFrom && v.fecha < filterDateFrom) return false;
       if (filterDateTo && v.fecha > filterDateTo) return false;
       if (filterText) {
@@ -1709,7 +1710,7 @@ const VisitHistoryPanel = ({
 
           {/* Visit cards */}
           {monthVisits.map(v => {
-            const cat = CATEGORIES.find(c => c.id === v.categoryId);
+            const cat = CATEGORIES.find(c => c.id === v.categoryId) || CATEGORIES.find(c => c.id === v.category_id);
             const isExpanded = expandedId === v.id;
             const summary = extractVisitSummary(v, cat);
             const prevVisit = findPrevVisit(v);
@@ -2949,16 +2950,20 @@ const fetchVisits = async (clientId) => {
       {/* ═══ ENHANCED VISIT HISTORY ═══ */}
       <VisitHistoryPanel
         visits={visits}
-        onView={(v, cat) => {
+        onView={(v, catArg) => {
+          const cat = catArg || CATEGORIES.find(c => c.id === (v.categoryId || v.category_id));
+          if (!cat) return flash("No se puede identificar el módulo de esta visita", "error");
           setSelVisit(v); setSelCat(cat);
           setFormData({ _fecha: v.fecha, ...v.data });
-          const exp = {}; cat.sections.forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
+          const exp = {}; (cat.sections || []).forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
           setVw("viewVisit");
         }}
-        onEdit={(v, cat) => {
+        onEdit={(v, catArg) => {
+          const cat = catArg || CATEGORIES.find(c => c.id === (v.categoryId || v.category_id));
+          if (!cat) return flash("No se puede identificar el módulo de esta visita", "error");
           setSelVisit(v); setSelCat(cat);
           setFormData({ _fecha: v.fecha, ...v.data });
-          const exp = {}; cat.sections.forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
+          const exp = {}; (cat.sections || []).forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
           setVw("newVisit");
         }}
         onDelete={(v) => deleteVisit(v)}
