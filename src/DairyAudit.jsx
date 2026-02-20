@@ -2165,6 +2165,9 @@ export default function DairyAuditApp() {
   const [msg, setMsg] = useState(null);
   const [searchQ, setSearchQ] = useState("");
   const [expandedSections, setExpandedSections] = useState({});
+  const [infoClient, setInfoClient] = useState("all");
+  const [infoMetric, setInfoMetric] = useState("bcs");
+  const [allVisitsCache, setAllVisitsCache] = useState([]);
 
   const toggleSection = (secId) => {
     setExpandedSections(prev => ({ ...prev, [secId]: !prev[secId] }));
@@ -2713,10 +2716,6 @@ const fetchVisits = async (clientId) => {
   );
 
   // ── INFORMES ──
-  const [infoClient, setInfoClient] = useState("all");
-  const [infoMetric, setInfoMetric] = useState("bcs");
-  const [allVisitsCache, setAllVisitsCache] = useState([]);
-
   useEffect(() => {
     if (vw !== "informes" || !user) return;
     (async () => {
