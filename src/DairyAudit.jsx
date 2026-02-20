@@ -221,7 +221,7 @@ const CALIDAD_CAMA_SECTIONS = [
 // 4+5) CALIDAD ALIMENTO / PROCESAMIENTO GRANO
 // ═══════════════════════════════════════════════════
 const CALIDAD_ALIMENTO_SECTIONS = [
-  { id: "ali_ensilaje", title: "4. Calidad de ensilajes y reservas", subtitle: "Análisis composición, micotoxinas, distribución de partículas", fields: [
+  { id: "ali_ensilaje", title: "4. Calidad de ensilajes y reservas", subtitle: "Inventario de lotes, análisis composición, micotoxinas, distribución de partículas", customComponent: "forage_stock", fields: [
     { id: "ali_tipo_ensilaje", label: "Tipo de ensilaje evaluado", type: "text", placeholder: "Ej: Ensilaje de maíz, silo bolsa #3" },
     { id: "ali_ms_ensilaje", label: "%MS del ensilaje", type: "number", placeholder: "33", unit: "%" },
     { id: "ali_ph_ensilaje", label: "pH del ensilaje", type: "number", placeholder: "3.8", step: "0.1" },
@@ -2359,6 +2359,25 @@ const generateTextReport = (visit, client, category) => {
       }
     }
 
+    // Forage stock (sección dedicada tipo ali_ensilaje)
+    if (sec.customComponent === "forage_stock") {
+      const stock = visit.data?.[`${sec.id}_stock`];
+      if (stock?.length) {
+        txt += "  Inventario de Forrajes / Reservas:\n";
+        txt += "  Forraje                   Lote          Stock kg TC   kg MS   Días\n";
+        txt += "  ────────────────────────────────────────────────────────────────\n";
+        stock.forEach(l => {
+          const sTC = parseFloat(l.stock_kg_tc) || 0;
+          const kgMS = parseFloat(l.ms_pct) > 0 ? round(sTC * parseFloat(l.ms_pct) / 100, 0) : null;
+          const consumo = parseFloat(l.consumo_kg_tc) || 0;
+          const vacas = parseFloat(l.vacas) || 1;
+          const dias = consumo > 0 ? Math.floor(sTC / (consumo * vacas)) : null;
+          txt += `  ${(l.name || "").padEnd(26)} ${(l.lot || "").padEnd(13)} ${sTC > 0 ? sTC.toLocaleString("es-UY").padStart(10) : "         —"}   ${kgMS !== null ? String(kgMS.toLocaleString("es-UY")).padStart(6) : "     —"}  ${dias !== null ? dias + "d" : "—"}\n`;
+        });
+        txt += "\n";
+      }
+    }
+
     // Penn State
     if (sec.customComponent === "pennstate") {
       const ps = visit.data?.[`${sec.id}_pennstate`];
@@ -2486,6 +2505,16 @@ const generateCSV = (visit, client, category) => {
         csv += `"${sec.title} - Stock","${l.name || ""}${l.lot ? " (" + l.lot + ")" : ""}","StockTC:${sTC} kgMS:${kgMS} Días:${dias}"\n`;
       });
     }
+    if (sec.customComponent === "forage_stock") {
+      (visit.data?.[`${sec.id}_stock`] || []).forEach(l => {
+        const sTC = parseFloat(l.stock_kg_tc) || 0;
+        const kgMS = parseFloat(l.ms_pct) > 0 ? round(sTC * parseFloat(l.ms_pct) / 100, 0) : "";
+        const consumo = parseFloat(l.consumo_kg_tc) || 0;
+        const vacas = parseFloat(l.vacas) || 1;
+        const dias = consumo > 0 ? Math.floor(sTC / (consumo * vacas)) : "";
+        csv += `"${sec.title}","${l.name || ""}${l.lot ? " (" + l.lot + ")" : ""}","StockTC:${sTC} kgMS:${kgMS} Días:${dias}"\n`;
+      });
+    }
     if (sec.customComponent?.startsWith("cowscore_")) {
       const data = visit.data?.[`${sec.id}_cowscore`];
       (data?.cows || []).forEach(c => {
@@ -2581,6 +2610,23 @@ const generateHTMLReport = (visit, client, category) => {
             <tbody>${stockRows}</tbody>
           </table>
         </div>`;
+      }
+    }
+
+    if (sec.customComponent === "forage_stock") {
+      const stock = d[`${sec.id}_stock`] || [];
+      if (stock.length) {
+        const stockRows = stock.map(l => {
+          const sTC = parseFloat(l.stock_kg_tc) || 0;
+          const kgMS = parseFloat(l.ms_pct) > 0 ? round(sTC * parseFloat(l.ms_pct) / 100, 0) : null;
+          const consumo = parseFloat(l.consumo_kg_tc) || 0;
+          const vacas = parseFloat(l.vacas) || 1;
+          const dias = consumo > 0 ? Math.floor(sTC / (consumo * vacas)) : null;
+          const col = dias === null ? "#888" : dias > 30 ? "#22c55e" : dias >= 15 ? "#f59e0b" : "#ef4444";
+          const bg = dias === null ? "transparent" : dias > 30 ? "#f0fdf4" : dias >= 15 ? "#fffbeb" : "#fef2f2";
+          return `<tr style="background:${bg}"><td style="padding:5px 8px">${l.name || "—"}</td><td style="padding:5px 8px;color:#888">${l.lot || "—"}</td><td style="padding:5px 8px;text-align:right">${sTC ? sTC.toLocaleString("es-UY") : "—"}</td><td style="padding:5px 8px;text-align:right">${kgMS !== null ? kgMS.toLocaleString("es-UY") : "—"}</td><td style="padding:5px 8px;text-align:center;font-weight:700;color:${col}">${dias !== null ? dias + " d" : "—"}</td></tr>`;
+        }).join("");
+        customContent = `<div style="margin-top:8px"><div style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:6px">📦 Inventario de Lotes</div><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:${accentColor}10"><th style="padding:5px 8px;text-align:left">Forraje</th><th style="padding:5px 8px;text-align:left">Lote</th><th style="padding:5px 8px;text-align:right">Stock kg TC</th><th style="padding:5px 8px;text-align:right">kg MS</th><th style="padding:5px 8px;text-align:center">Días restantes</th></tr></thead><tbody>${stockRows}</tbody></table></div>`;
       }
     }
 
@@ -3865,7 +3911,9 @@ const fetchVisits = async (clientId) => {
         const isExpanded = expandedSections[sec.id] !== false;
         const ro = vw === "viewVisit";
         const hasData = sec.customComponent
-          ? !!formData[`${sec.id}_${sec.customComponent.replace("cowscore_","").replace("ph_scoring","ph")}`]
+          ? (sec.customComponent === "forage_stock"
+              ? (formData[`${sec.id}_stock`]?.length > 0 || sec.fields.some(f => !!formData[f.id]))
+              : !!formData[`${sec.id}_${sec.customComponent.replace("cowscore_","").replace("ph_scoring","ph").replace("forage_stock","stock")}`])
           : sec.fields.some(f => !!formData[f.id]);
         return (
           <Card key={sec.id} style={{ marginBottom: 12, borderLeft: `4px solid ${selCat.color}` }}>
@@ -4012,6 +4060,14 @@ const fetchVisits = async (clientId) => {
                     value={formData[`${sec.id}_cleanliness`] || { cows: [], obs: "" }}
                     onChange={val => handleFieldChange(`${sec.id}_cleanliness`, val)}
                     readOnly={ro}
+                  />
+                )}
+                {sec.customComponent === "forage_stock" && (
+                  <ForageStockPanel
+                    value={formData[`${sec.id}_stock`] || []}
+                    onChange={val => handleFieldChange(`${sec.id}_stock`, val)}
+                    readOnly={ro}
+                    dietItems={[]}
                   />
                 )}
                 {sec.customComponent === "grain" && (
