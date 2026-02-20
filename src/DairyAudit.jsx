@@ -2713,19 +2713,10 @@ const fetchVisits = async (clientId) => {
   );
 
   // ── INFORMES ──
-  // Reúne TODAS las visitas de TODOS los clientes para análisis
-  const allVisitsForInformes = useMemo(() => {
-    // visits solo tiene el cliente seleccionado — necesitamos todas
-    // Las cargamos acá desde el state global si están disponibles
-    return visits; // se expande abajo cuando se selecciona cliente
-  }, [visits]);
-
   const [infoClient, setInfoClient] = useState("all");
-  const [infoCat, setInfoCat] = useState("all");
   const [infoMetric, setInfoMetric] = useState("bcs");
   const [allVisitsCache, setAllVisitsCache] = useState([]);
 
-  // Carga todas las visitas para informes
   useEffect(() => {
     if (vw !== "informes" || !user) return;
     (async () => {
