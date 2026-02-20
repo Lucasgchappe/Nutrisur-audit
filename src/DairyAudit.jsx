@@ -2235,6 +2235,20 @@ useEffect(() => {
   })();
 }, [user, selClient, vw]);
 
+useEffect(() => {
+  if (vw !== "informes" || !user) return;
+  (async () => {
+    const { data, error } = await supabase
+      .from("visits").select("*")
+      .order("fecha", { ascending: true });
+    if (!error && data) {
+      setAllVisitsCache(data.map(v => ({
+        ...v, clientId: v.client_id, categoryId: v.category_id,
+      })));
+    }
+  })();
+}, [vw, user]);
+
 const filteredClients = (clients || []).filter(c => {
   const q = (searchQ || "").toLowerCase();
   return (
@@ -2716,20 +2730,6 @@ const fetchVisits = async (clientId) => {
   );
 
   // ── INFORMES ──
-  useEffect(() => {
-    if (vw !== "informes" || !user) return;
-    (async () => {
-      const { data, error } = await supabase
-        .from("visits").select("*")
-        .order("fecha", { ascending: true });
-      if (!error && data) {
-        setAllVisitsCache(data.map(v => ({
-          ...v, clientId: v.client_id, categoryId: v.category_id,
-        })));
-      }
-    })();
-  }, [vw, user]);
-
   const METRICS = [
     { id: "bcs", label: "BCS promedio", cat: "preparto", extract: (v) => { const cs = v.data?.pr_bcs_cowscore || v.data?.fr_bcs_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
     { id: "cetosis", label: "Cetosis prevalencia %", cat: "frescas", extract: (v) => { const kt = v.data?.fr_cetosis_ketosis; if (!kt?.cows?.length) return null; return round(kt.cows.filter(c=>c.positivo).length/kt.cows.length*100,1); } },
