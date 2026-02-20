@@ -140,12 +140,13 @@ const Icon = ({ name, size = 20, color = "currentColor" }) => {
 
 // ─── Styles ───
 const C = {
-  bg: "#F0F4F8", card: "#FFFFFF", primary: "#1565C0", primaryLight: "#1976D2", primaryDark: "#0D47A1",
-  accent: "#E76F51", accentLight: "#F4A261", text: "#1E3A5F", textLight: "#5C7A9A",
-  border: "#B8CCE0", borderLight: "#D6E4F0", success: "#1B6B3A", warning: "#E9A000",
-  danger: "#C62828", inputBg: "#F7FAFD",
+  bg: "#F1F5F9", card: "#FFFFFF", primary: "#1565C0", primaryLight: "#1E88E5", primaryDark: "#0D47A1",
+  accent: "#E76F51", accentLight: "#F4A261", text: "#0F1D2E", textLight: "#64748B",
+  border: "#CBD5E1", borderLight: "#E2EAF2", success: "#15803D", warning: "#D97706",
+  danger: "#B91C1C", inputBg: "#F8FAFC",
 };
-const ff = "'DM Sans', 'Nunito', system-ui, sans-serif";
+const ff = "'Inter', system-ui, -apple-system, sans-serif";
+const ffSerif = "'Playfair Display', Georgia, serif";
 
 // ─── Base Components ───
 const Btn = ({ children, onClick, variant = "primary", size = "md", icon, disabled, style: sx, ...r }) => {
@@ -2148,6 +2149,359 @@ const makeDownloadReport = (currentClient, flashFn) => (visit, type) => {
     }
   };
 // ═══════════════════════════════════════════════════
+// METRICS CONFIG (fuera de cualquier componente)
+// ═══════════════════════════════════════════════════
+const METRICS = [
+  { id: "bcs",            label: "BCS promedio",              unit: "",    ref: [2.75, 3.25], cat: "preparto",        extract: (v) => { const cs = v.data?.pr_bcs_cowscore || v.data?.fr_bcs_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c => parseFloat(c.score)).filter(x => !isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+  { id: "cetosis",        label: "Cetosis %",                 unit: "%",   ref: [0, 15],      cat: "frescas",         extract: (v) => { const kt = v.data?.fr_cetosis_ketosis; if (!kt?.cows?.length) return null; return round(kt.cows.filter(c=>c.positivo).length/kt.cows.length*100,1); } },
+  { id: "leche14",        label: "Leche 14 DIM",              unit: "lt",  ref: [20, 35],     cat: "frescas",         extract: (v) => parseFloat(v.data?.fr_prod_14dim) || null },
+  { id: "leche7",         label: "Leche 7 DIM",               unit: "lt",  ref: [15, 30],     cat: "frescas",         extract: (v) => parseFloat(v.data?.fr_prod_7dim) || null },
+  { id: "grasa",          label: "% Grasa",                   unit: "%",   ref: [3.5, 4.5],   cat: "frescas",         extract: (v) => parseFloat(v.data?.fr_prod_grasa) || null },
+  { id: "proteina",       label: "% Proteína",                unit: "%",   ref: [3.0, 3.8],   cat: "frescas",         extract: (v) => parseFloat(v.data?.fr_prod_prot) || null },
+  { id: "cms_oferta",     label: "CMS oferta",                unit: "kg",  ref: [18, 26],     cat: "frescas",         extract: (v) => parseFloat(v.data?.fr_dmi_oferta) || null },
+  { id: "ith",            label: "ITH calórico",              unit: "",    ref: [0, 72],      cat: "estres_calorico", extract: (v) => parseFloat(v.data?.ec_ith) || null },
+  { id: "temp_cama_sup",  label: "Temp. cama (°C)",           unit: "°C",  ref: [0, 38],      cat: "calidad_cama",    extract: (v) => { const pts = v.data?.cama_medicion_bedding?.points; if (!pts?.length) return null; const t = pts.map(p=>parseFloat(p.temp_sup)).filter(x=>!isNaN(x)); return t.length ? round(t.reduce((a,b)=>a+b,0)/t.length,1) : null; } },
+  { id: "pennstate_sup",  label: "Penn State sup (%)",        unit: "%",   ref: [2, 8],       cat: "frescas",         extract: (v) => { const ps = v.data?.fr_pennstate_pennstate; return ps?.sup_avg ? parseFloat(ps.sup_avg) : null; } },
+  { id: "pennstate_fondo",label: "Penn State fondo (%)",      unit: "%",   ref: [8, 20],      cat: "frescas",         extract: (v) => { const ps = v.data?.fr_pennstate_pennstate; return ps?.fondo_avg ? parseFloat(ps.fondo_avg) : null; } },
+  { id: "heces",          label: "Score heces",               unit: "",    ref: [2, 3],       cat: "frescas",         extract: (v) => { const cs = v.data?.fr_heces_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+  { id: "rumen",          label: "Llenado ruminal",           unit: "",    ref: [3, 5],       cat: "frescas",         extract: (v) => { const cs = v.data?.fr_rumen_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+];
+
+const CLIENT_COLORS = ["#1565C0","#E76F51","#2D9CDB","#27AE60","#9B51E0","#F2994A","#EB5757","#0F766E"];
+
+// ═══════════════════════════════════════════════════
+// INFORMES PANEL (componente externo — sin hooks condicionales)
+// ═══════════════════════════════════════════════════
+function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, infoMetric, setInfoMetric }) {
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [tab, setTab] = useState("evolucion"); // evolucion | resumen | comparacion
+
+  const metric = METRICS.find(m => m.id === infoMetric) || METRICS[0];
+
+  // Filtrar visitas
+  const filtVisits = allVisitsCache.filter(v => {
+    if (infoClient !== "all" && v.client_id !== infoClient) return false;
+    if (metric.cat && v.categoryId !== metric.cat) return false;
+    if (dateFrom && v.fecha < dateFrom) return false;
+    if (dateTo && v.fecha > dateTo) return false;
+    return true;
+  });
+
+  // Extraer puntos de datos
+  const dataPoints = filtVisits.map(v => {
+    const val = metric.extract(v);
+    const client = clients.find(c => c.id === v.client_id);
+    return val !== null ? { fecha: v.fecha, val, clientName: client?.nombre || "—", clientId: v.client_id, visitId: v.id } : null;
+  }).filter(Boolean).sort((a, b) => a.fecha?.localeCompare(b.fecha));
+
+  // Estadísticas globales
+  const vals = dataPoints.map(d => d.val);
+  const n = vals.length;
+  const avg = n > 0 ? round(vals.reduce((a,b)=>a+b,0)/n, 2) : null;
+  const minV = n > 0 ? Math.min(...vals) : null;
+  const maxV = n > 0 ? Math.max(...vals) : null;
+  const sd = n > 1 ? round(Math.sqrt(vals.reduce((s,v)=>s+(v-avg)**2,0)/(n-1)),2) : null;
+  const trend = n >= 2 ? (dataPoints[n-1].val > dataPoints[0].val ? "↑" : dataPoints[n-1].val < dataPoints[0].val ? "↓" : "→") : null;
+  const trendColor = trend === "↑" ? C.success : trend === "↓" ? C.danger : C.textLight;
+
+  // Agrupado por cliente
+  const byClient = {};
+  dataPoints.forEach(d => {
+    if (!byClient[d.clientName]) byClient[d.clientName] = [];
+    byClient[d.clientName].push(d);
+  });
+
+  // Resumen por cliente (para tab Resumen)
+  const clientSummary = Object.entries(byClient).map(([name, pts], i) => {
+    const pVals = pts.map(p => p.val);
+    const pAvg = round(pVals.reduce((a,b)=>a+b,0)/pVals.length, 2);
+    const pLast = pts[pts.length-1]?.val;
+    const pFirst = pts[0]?.val;
+    const pTrend = pts.length >= 2 ? (pLast > pFirst ? "↑" : pLast < pFirst ? "↓" : "→") : "—";
+    const pTrendColor = pTrend === "↑" ? C.success : pTrend === "↓" ? C.danger : C.textLight;
+    const inRef = metric.ref ? (pAvg >= metric.ref[0] && pAvg <= metric.ref[1]) : null;
+    return { name, pts, pAvg, pLast, pFirst, pTrend, pTrendColor, inRef, color: CLIENT_COLORS[i % CLIENT_COLORS.length], n: pts.length };
+  });
+
+  // Chart config
+  const chartH = 220;
+  const pad = { t: 24, b: 44, l: 52, r: 24 };
+  const svgW = 600;
+  const minY = minV !== null ? Math.floor(minV * 0.92) : 0;
+  const maxY = maxV !== null ? Math.ceil(maxV * 1.08) : 10;
+  const rangeY = maxY - minY || 1;
+  const toY = (val) => chartH - pad.b - ((val - minY) / rangeY) * (chartH - pad.t - pad.b);
+  const toX = (i, total) => pad.l + (total > 1 ? i * (svgW - pad.l - pad.r) / (total - 1) : (svgW - pad.l - pad.r) / 2);
+
+  const selStyle = (active) => ({
+    padding: "7px 18px", fontSize: 13, fontWeight: 600, fontFamily: ff, borderRadius: 8, cursor: "pointer",
+    border: "none", background: active ? C.primary : "transparent", color: active ? "#fff" : C.textLight,
+    transition: "all 0.18s",
+  });
+
+  return (
+    <div style={{ padding: "28px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+      {/* Encabezado */}
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontFamily: ffSerif, fontSize: 28, margin: 0, color: C.text }}>Informes y Análisis</h2>
+        <p style={{ color: C.textLight, marginTop: 4, fontSize: 14 }}>Seguimiento de indicadores técnicos por visita, cliente y período</p>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, padding: "18px 20px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textLight, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Indicador</label>
+            <select value={infoMetric} onChange={e => setInfoMetric(e.target.value)} style={{ ...inputStyle, fontSize: 13, fontWeight: 500 }}>
+              {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}{m.unit ? ` (${m.unit})` : ""}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textLight, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Cliente</label>
+            <select value={infoClient} onChange={e => setInfoClient(e.target.value)} style={{ ...inputStyle, fontSize: 13, fontWeight: 500 }}>
+              <option value="all">Todos los clientes</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textLight, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Desde</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...inputStyle, fontSize: 13 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textLight, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Hasta</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...inputStyle, fontSize: 13 }} />
+          </div>
+          {(dateFrom || dateTo) && (
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <button onClick={() => { setDateFrom(""); setDateTo(""); }} style={{ ...inputStyle, width: "auto", padding: "10px 16px", background: C.borderLight, color: C.textLight, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✕ Limpiar</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      {n > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 20 }}>
+          {[
+            { label: "Registros", val: n, unit: "", icon: "📋", color: C.primary },
+            { label: "Promedio", val: avg, unit: metric.unit, icon: "📊", color: C.primary },
+            { label: "Mínimo", val: minV, unit: metric.unit, icon: "⬇️", color: C.accent },
+            { label: "Máximo", val: maxV, unit: metric.unit, icon: "⬆️", color: C.success },
+            { label: "Desvío std.", val: sd, unit: "", icon: "〰️", color: "#7C3AED" },
+            { label: "Tendencia", val: trend, unit: "", icon: "📈", color: trendColor },
+          ].map((k, i) => (
+            <div key={i} style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.borderLight}`, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ fontSize: 18, marginBottom: 4 }}>{k.icon}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: k.color, lineHeight: 1 }}>{k.val ?? "—"}{k.val !== null && k.unit ? <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.7 }}> {k.unit}</span> : null}</div>
+              <div style={{ fontSize: 11, color: C.textLight, marginTop: 4, fontWeight: 500 }}>{k.label}</div>
+              {k.label === "Promedio" && metric.ref && avg !== null && (
+                <div style={{ marginTop: 6, fontSize: 10, fontWeight: 600, color: (avg >= metric.ref[0] && avg <= metric.ref[1]) ? C.success : C.danger }}>
+                  Ref: {metric.ref[0]}–{metric.ref[1]}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {n === 0 ? (
+        <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, textAlign: "center", padding: "56px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📊</div>
+          <p style={{ color: C.text, fontSize: 16, fontWeight: 600, margin: "0 0 6px" }}>Sin datos para «{metric.label}»</p>
+          <p style={{ color: C.textLight, fontSize: 14, margin: 0 }}>Ajustá los filtros o cargá visitas con ese módulo.</p>
+        </div>
+      ) : (
+        <>
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 4, background: C.borderLight, borderRadius: 10, padding: 4, width: "fit-content", marginBottom: 20 }}>
+            {[["evolucion","📈 Evolución"],["resumen","📋 Resumen por cliente"],["comparacion","📊 Comparación"]].map(([id, label]) => (
+              <button key={id} style={selStyle(tab === id)} onClick={() => setTab(id)}>{label}</button>
+            ))}
+          </div>
+
+          {/* TAB: Evolución temporal */}
+          {tab === "evolucion" && (
+            <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, padding: "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Evolución temporal — {metric.label}</h3>
+                {metric.ref && <span style={{ fontSize: 12, color: C.textLight, background: C.borderLight, borderRadius: 20, padding: "3px 12px" }}>Rango ideal: {metric.ref[0]}–{metric.ref[1]} {metric.unit}</span>}
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <svg width="100%" height={chartH} style={{ display: "block", minWidth: 340 }} viewBox={`0 0 ${svgW} ${chartH}`} preserveAspectRatio="xMidYMid meet">
+                  {/* Zona de referencia */}
+                  {metric.ref && (() => {
+                    const y1 = toY(Math.min(metric.ref[1], maxY));
+                    const y2 = toY(Math.max(metric.ref[0], minY));
+                    return <rect x={pad.l} y={y1} width={svgW - pad.l - pad.r} height={y2 - y1} fill={C.success + "18"} />;
+                  })()}
+                  {/* Grid lines */}
+                  {[0,0.25,0.5,0.75,1].map(pct => {
+                    const y = pad.t + pct * (chartH - pad.t - pad.b);
+                    const val = round(maxY - pct * rangeY, 1);
+                    return (
+                      <g key={pct}>
+                        <line x1={pad.l} y1={y} x2={svgW - pad.r} y2={y} stroke={C.borderLight} strokeWidth="1" strokeDasharray="4,3" />
+                        <text x={pad.l - 7} y={y + 4} fontSize="10" fill={C.textLight} textAnchor="end" fontFamily={ff}>{val}</text>
+                      </g>
+                    );
+                  })}
+                  {/* Líneas por cliente */}
+                  {Object.entries(byClient).map(([clientName, pts], ci) => {
+                    const color = CLIENT_COLORS[ci % CLIENT_COLORS.length];
+                    return (
+                      <g key={clientName}>
+                        {pts.length > 1 && (
+                          <polyline
+                            points={pts.map((d,i) => `${toX(i,pts.length)},${toY(d.val)}`).join(" ")}
+                            fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+                          />
+                        )}
+                        {pts.map((d, i) => {
+                          const x = toX(i, pts.length);
+                          const y = toY(d.val);
+                          return (
+                            <g key={i}>
+                              <circle cx={x} cy={y} r="5" fill={color} stroke="#fff" strokeWidth="2.5" />
+                              <text x={x} y={y - 12} fontSize="10" fill={color} textAnchor="middle" fontWeight="700" fontFamily={ff}>{d.val}</text>
+                              <text x={x} y={chartH - 6} fontSize="9" fill={C.textLight} textAnchor="middle" fontFamily={ff}>{fmt(d.fecha)}</text>
+                            </g>
+                          );
+                        })}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+              {/* Leyenda */}
+              {Object.keys(byClient).length > 1 && (
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.borderLight}` }}>
+                  {Object.keys(byClient).map((name, i) => (
+                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500 }}>
+                      <div style={{ width: 16, height: 4, borderRadius: 2, background: CLIENT_COLORS[i % CLIENT_COLORS.length] }} />
+                      <span style={{ color: C.text }}>{name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: Resumen por cliente */}
+          {tab === "resumen" && (
+            <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: C.primary, color: "#fff" }}>
+                    {["Cliente","Visitas","Primer valor","Último valor","Promedio","Tendencia","vs. Referencia"].map(h => (
+                      <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 600, fontSize: 12, letterSpacing: 0.3 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientSummary.map((row, i) => (
+                    <tr key={row.name} style={{ borderBottom: `1px solid ${C.borderLight}`, background: i % 2 === 0 ? "#fff" : C.bg }}>
+                      <td style={{ padding: "11px 14px", fontWeight: 600, color: row.color }}>{row.name}</td>
+                      <td style={{ padding: "11px 14px", color: C.textLight, textAlign: "center" }}>{row.n}</td>
+                      <td style={{ padding: "11px 14px", textAlign: "center" }}>{row.pFirst} <span style={{ fontSize: 11, color: C.textLight }}>{metric.unit}</span></td>
+                      <td style={{ padding: "11px 14px", textAlign: "center", fontWeight: 700, color: C.primary }}>{row.pLast} <span style={{ fontSize: 11, color: C.textLight }}>{metric.unit}</span></td>
+                      <td style={{ padding: "11px 14px", textAlign: "center", fontWeight: 600 }}>{row.pAvg} <span style={{ fontSize: 11, color: C.textLight }}>{metric.unit}</span></td>
+                      <td style={{ padding: "11px 14px", textAlign: "center", fontSize: 16, fontWeight: 700, color: row.pTrendColor }}>{row.pTrend}</td>
+                      <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                        {metric.ref && row.inRef !== null ? (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: row.inRef ? C.success + "20" : C.danger + "15", color: row.inRef ? C.success : C.danger }}>
+                            {row.inRef ? "✓ OK" : "⚠ Fuera"}
+                          </span>
+                        ) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Detalle de visitas */}
+              <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.borderLight}` }}>
+                <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700 }}>Detalle por visita</h4>
+                <div style={{ overflowY: "auto", maxHeight: 260 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: C.borderLight }}>
+                        {["Cliente","Fecha","Valor","vs Promedio global"].map(h => (
+                          <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: C.textLight }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...dataPoints].reverse().map((d, i) => {
+                        const delta = avg !== null ? round(d.val - avg, 2) : null;
+                        const clientIdx = Object.keys(byClient).indexOf(d.clientName);
+                        return (
+                          <tr key={i} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+                            <td style={{ padding: "7px 12px", fontWeight: 600, color: CLIENT_COLORS[clientIdx % CLIENT_COLORS.length] }}>{d.clientName}</td>
+                            <td style={{ padding: "7px 12px", color: C.textLight }}>{fmt(d.fecha)}</td>
+                            <td style={{ padding: "7px 12px", fontWeight: 700, color: C.primary }}>{d.val} <span style={{ fontSize: 10, color: C.textLight }}>{metric.unit}</span></td>
+                            <td style={{ padding: "7px 12px" }}>
+                              {delta !== null && (
+                                <span style={{ fontSize: 11, fontWeight: 700, color: delta >= 0 ? C.success : C.danger }}>
+                                  {delta > 0 ? "+" : ""}{delta}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: Comparación entre clientes (barras) */}
+          {tab === "comparacion" && (
+            <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, padding: "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+              <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 700 }}>Comparación — último valor por cliente</h3>
+              {clientSummary.length === 0 ? (
+                <p style={{ color: C.textLight }}>Seleccioná "Todos los clientes" para comparar.</p>
+              ) : (
+                <div style={{ display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap", minHeight: 180 }}>
+                  {clientSummary.map((row) => {
+                    const barPct = maxV > 0 ? Math.min((row.pLast / maxV) * 100, 100) : 0;
+                    const refOk = metric.ref ? (row.pLast >= metric.ref[0] && row.pLast <= metric.ref[1]) : null;
+                    return (
+                      <div key={row.name} style={{ flex: 1, minWidth: 90, textAlign: "center" }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: row.color, marginBottom: 6 }}>
+                          {row.pLast} <span style={{ fontSize: 11, color: C.textLight }}>{metric.unit}</span>
+                        </div>
+                        {refOk !== null && (
+                          <div style={{ fontSize: 10, fontWeight: 700, color: refOk ? C.success : C.danger, marginBottom: 4 }}>
+                            {refOk ? "✓ OK" : "⚠ Fuera"}
+                          </div>
+                        )}
+                        <div style={{ height: 140, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                          <div style={{ width: 44, height: `${barPct}%`, minHeight: 6, background: `linear-gradient(180deg, ${row.color}cc, ${row.color})`, borderRadius: "6px 6px 0 0", transition: "height 0.4s", position: "relative" }} />
+                        </div>
+                        <div style={{ width: "100%", height: 2, background: C.borderLight, marginBottom: 6 }} />
+                        <div style={{ fontSize: 11, color: C.text, fontWeight: 600, wordBreak: "break-word", lineHeight: 1.3 }}>{row.name}</div>
+                        <div style={{ fontSize: 10, color: C.textLight, marginTop: 2 }}>{row.n} visitas</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {metric.ref && (
+                <div style={{ marginTop: 20, padding: "10px 16px", background: C.success + "12", borderRadius: 8, fontSize: 12, color: C.success, fontWeight: 600 }}>
+                  Rango de referencia: {metric.ref[0]}–{metric.ref[1]} {metric.unit}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════
 export default function DairyAuditApp() {
@@ -2450,11 +2804,11 @@ const Toast = msg && (
   if (vw === "login" || vw === "register") return (
     <div style={{ fontFamily: ff, minHeight: "100vh", background: `linear-gradient(135deg, ${C.primaryDark} 0%, ${C.primary} 50%, ${C.primaryLight} 100%)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       {Toast}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap'); * { box-sizing: border-box; }`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap'); * { box-sizing: border-box; }`}</style>
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 32, color: "#fff" }}>
           <div style={{ fontSize: 48 }}>🐄</div>
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 32, margin: "8px 0 0", fontWeight: 700, letterSpacing: 1 }}>NutriSur</h1>
+          <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 32, margin: "8px 0 0", fontWeight: 700, letterSpacing: 1 }}>NutriSur</h1>
           <p style={{ fontSize: 14, opacity: 0.8 }}>Sistema de Auditoría Lechera</p>
         </div>
         <Card style={{ padding: 32 }}>
@@ -2470,13 +2824,37 @@ const Toast = msg && (
   );
 
   // ── LAYOUT ──
-  const Header = (<div style={{ background: C.primaryDark, color: "#fff", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}><style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap'); * { box-sizing: border-box; }`}</style><div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}><span style={{ fontSize: 26 }}>🐄</span><div><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>NutriSur</span><span style={{ fontSize: 11, opacity: 0.7, marginLeft: 8, verticalAlign: "middle" }}>Auditoría Lechera</span></div></div><div style={{ display: "flex", alignItems: "center", gap: 16 }}><span style={{ fontSize: 13, opacity: 0.8 }}>👤 {user?.user_metadata?.nombre || user?.email || "Técnico"}</span><Btn variant="ghost" size="sm" icon="logout" onClick={handleLogout} style={{ color: "#fff", opacity: 0.8 }}>Salir</Btn></div></div>);
-  const Nav = (<div style={{ display: "flex", gap: 8, padding: "12px 24px", background: C.bg, borderBottom: `1px solid ${C.borderLight}` }}><Btn variant={vw === "dashboard" ? "primary" : "outline"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); }}>Inicio</Btn><Btn variant={["clients", "clientDetail"].includes(vw) ? "primary" : "outline"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn><Btn variant={vw === "informes" ? "primary" : "outline"} size="sm" icon="chart" onClick={() => setVw("informes")}>Informes</Btn></div>);
+  const Header = (
+    <div style={{ background: `linear-gradient(90deg, ${C.primaryDark} 0%, ${C.primary} 100%)`, color: "#fff", padding: "0 28px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 0 rgba(255,255,255,0.08), 0 4px 20px rgba(13,71,161,0.35)" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap'); * { box-sizing: border-box; }`}</style>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}>
+        <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🐄</div>
+        <div>
+          <span style={{ fontFamily: ffSerif, fontSize: 20, fontWeight: 700, letterSpacing: 0.3 }}>NutriSur</span>
+          <span style={{ fontSize: 11, opacity: 0.55, marginLeft: 10, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 500 }}>Auditoría Lechera</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "5px 14px", fontSize: 13, fontWeight: 500 }}>
+          <span style={{ opacity: 0.7 }}>👤</span>
+          <span>{user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</span>
+        </div>
+        <Btn variant="ghost" size="sm" icon="logout" onClick={handleLogout} style={{ color: "rgba(255,255,255,0.75)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8 }}>Salir</Btn>
+      </div>
+    </div>
+  );
+  const Nav = (
+    <div style={{ display: "flex", gap: 4, padding: "10px 28px", background: "#fff", borderBottom: `1px solid ${C.borderLight}`, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+      <Btn variant={vw === "dashboard" ? "primary" : "ghost"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); }}>Inicio</Btn>
+      <Btn variant={["clients","clientDetail","newClient","newVisit","viewVisit"].includes(vw) ? "primary" : "ghost"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn>
+      <Btn variant={vw === "informes" ? "primary" : "ghost"} size="sm" icon="chart" onClick={() => setVw("informes")}>Informes</Btn>
+    </div>
+  );
 
   // ── DASHBOARD ──
   const Dashboard = (
     <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-      <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, marginBottom: 4 }}>Bienvenido, {user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</h2>
+      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, marginBottom: 4 }}>Bienvenido, {user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</h2>
       <p style={{ color: C.textLight, marginBottom: 24, fontSize: 15 }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
         <Card style={{ textAlign: "center", background: `linear-gradient(135deg, ${C.primary}, ${C.primaryLight})`, color: "#fff", border: "none" }}><div style={{ fontSize: 32, fontWeight: 700 }}>{clients.length}</div><div style={{ fontSize: 13, opacity: 0.9 }}>Clientes</div></Card>
@@ -2493,7 +2871,7 @@ const Toast = msg && (
   // ── CLIENTS ──
   const ClientList = (
     <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, margin: 0 }}>Clientes</h2><Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>Nuevo Cliente</Btn></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, margin: 0 }}>Clientes</h2><Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>Nuevo Cliente</Btn></div>
       <input type="text" placeholder="Buscar..." value={searchQ} onChange={e => setSearchQ(e.target.value)} style={{ ...inputStyle, marginBottom: 20 }} />
       {filteredClients.length === 0 ? <Card style={{ textAlign: "center", padding: 40 }}><div style={{ fontSize: 40 }}>🐄</div><p style={{ color: C.textLight }}>No hay clientes aún.</p></Card>
         : filteredClients.map(c => (<Card key={c.id} style={{ marginBottom: 10 }} onClick={() => { setSelClient(c); setVw("clientDetail"); }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontWeight: 600, fontSize: 16 }}>{c.nombre}</div><div style={{ fontSize: 13, color: C.textLight }}>{c.establecimiento} {c.localidad ? `• ${c.localidad}` : ""}</div></div><Icon name="eye" color={C.primary} /></div></Card>))}
@@ -2504,7 +2882,7 @@ const Toast = msg && (
   const NewClient = (
     <div style={{ padding: "24px 32px", maxWidth: 700, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clients")} style={{ marginBottom: 16 }}>Volver</Btn>
-      <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, marginBottom: 20 }}>{clientForm.id ? "Editar Cliente" : "Nuevo Cliente"}</h2>
+      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, marginBottom: 20 }}>{clientForm.id ? "Editar Cliente" : "Nuevo Cliente"}</h2>
       <Card>
         {[{ key: "nombre", label: "Nombre *", ph: "Ej: Juan Pérez" }, { key: "establecimiento", label: "Establecimiento *", ph: "Ej: Estancia La Aurora" }, { key: "localidad", label: "Localidad", ph: "Ej: Trenque Lauquen" }, { key: "provincia", label: "Provincia", ph: "Buenos Aires" }, { key: "contacto", label: "Teléfono", ph: "+54 9 11 1234-5678" }, { key: "email", label: "Email", ph: "juan@campo.com" }].map(({ key, label, ph }) => (
           <div key={key} style={{ marginBottom: 16 }}><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>{label}</label><input type="text" placeholder={ph} value={clientForm[key]} onChange={e => setClientForm({ ...clientForm, [key]: e.target.value })} style={inputStyle} /></div>
@@ -2554,7 +2932,7 @@ const fetchVisits = async (clientId) => {
       <Btn variant="ghost" icon="back" size="sm" onClick={() => { setVw("clients"); setSelClient(null); }} style={{ marginBottom: 16 }}>Volver</Btn>
       <Card style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-          <div><h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 24, margin: 0 }}>{selClient.nombre}</h2><p style={{ color: C.textLight, marginTop: 4, marginBottom: 0 }}>{selClient.establecimiento} {selClient.localidad ? `• ${selClient.localidad}` : ""}</p>{selClient.contacto && <p style={{ fontSize: 13, color: C.textLight, margin: "4px 0 0" }}>📞 {selClient.contacto}</p>}</div>
+          <div><h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, margin: 0 }}>{selClient.nombre}</h2><p style={{ color: C.textLight, marginTop: 4, marginBottom: 0 }}>{selClient.establecimiento} {selClient.localidad ? `• ${selClient.localidad}` : ""}</p>{selClient.contacto && <p style={{ fontSize: 13, color: C.textLight, margin: "4px 0 0" }}>📞 {selClient.contacto}</p>}</div>
           <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" icon="edit" size="sm" onClick={() => { setClientForm(selClient); setVw("newClient"); }}>Editar</Btn><Btn variant="danger" icon="trash" size="sm" onClick={() => deleteClient(selClient)}>Eliminar</Btn></div>
         </div>
       </Card>
@@ -2598,7 +2976,7 @@ const fetchVisits = async (clientId) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <Badge color={selCat.color}>{selCat.name}</Badge>
-          <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, margin: "8px 0 0" }}>{vw === "viewVisit" ? "Detalle de Visita" : (selVisit ? "Editar Visita" : "Nueva Visita")}</h2>
+          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 22, margin: "8px 0 0" }}>{vw === "viewVisit" ? "Detalle de Visita" : (selVisit ? "Editar Visita" : "Nueva Visita")}</h2>
           <p style={{ color: C.textLight, fontSize: 14, margin: "4px 0 0" }}>{selClient.nombre} — {selClient.establecimiento}</p>
         </div>
         {vw !== "viewVisit" && <Btn icon="save" onClick={saveVisit}>Guardar Visita</Btn>}
@@ -2729,249 +3107,17 @@ const fetchVisits = async (clientId) => {
     </div>
   );
 
-  // ── INFORMES ──
-  const METRICS = [
-    { id: "bcs", label: "BCS promedio", cat: "preparto", extract: (v) => { const cs = v.data?.pr_bcs_cowscore || v.data?.fr_bcs_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
-    { id: "cetosis", label: "Cetosis prevalencia %", cat: "frescas", extract: (v) => { const kt = v.data?.fr_cetosis_ketosis; if (!kt?.cows?.length) return null; return round(kt.cows.filter(c=>c.positivo).length/kt.cows.length*100,1); } },
-    { id: "leche14", label: "Leche a 14 DIM (lt)", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_14dim) || null },
-    { id: "leche7", label: "Leche a 7 DIM (lt)", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_7dim) || null },
-    { id: "grasa", label: "% Grasa", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_grasa) || null },
-    { id: "proteina", label: "% Proteína", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_prot) || null },
-    { id: "cms_oferta", label: "CMS oferta (kg MS)", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_dmi_oferta) || null },
-    { id: "ith", label: "ITH (índice calórico)", cat: "estres_calorico", extract: (v) => parseFloat(v.data?.ec_ith) || null },
-    { id: "temp_cama_sup", label: "Temp. cama superficial (°C)", cat: "calidad_cama", extract: (v) => { const pts = v.data?.cama_medicion_bedding?.points; if (!pts?.length) return null; const t = pts.map(p=>parseFloat(p.temp_sup)).filter(v=>!isNaN(v)); return t.length ? round(t.reduce((a,b)=>a+b,0)/t.length,1) : null; } },
-    { id: "pennstate_sup", label: "Penn State bandeja sup (%)", cat: "frescas", extract: (v) => { const ps = v.data?.fr_pennstate_pennstate; return ps?.sup_avg ? parseFloat(ps.sup_avg) : null; } },
-    { id: "pennstate_fondo", label: "Penn State fondo (%)", cat: "frescas", extract: (v) => { const ps = v.data?.fr_pennstate_pennstate; return ps?.fondo_avg ? parseFloat(ps.fondo_avg) : null; } },
-    { id: "heces", label: "Score heces promedio", cat: "frescas", extract: (v) => { const cs = v.data?.fr_heces_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(v=>!isNaN(v)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
-    { id: "rumen", label: "Llenado ruminal promedio", cat: "frescas", extract: (v) => { const cs = v.data?.fr_rumen_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(v=>!isNaN(v)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
-  ];
-
-  const InformesView = (() => {
-    const metric = METRICS.find(m => m.id === infoMetric) || METRICS[0];
-
-    // Filtrar visitas
-    const filtVisits = allVisitsCache.filter(v => {
-      if (infoClient !== "all" && v.client_id !== infoClient) return false;
-      if (metric.cat && v.categoryId !== metric.cat) return false;
-      return true;
-    });
-
-    // Extraer puntos de datos
-    const dataPoints = filtVisits.map(v => {
-      const val = metric.extract(v);
-      const client = clients.find(c => c.id === v.client_id);
-      return val !== null ? { fecha: v.fecha, val, clientName: client?.nombre || "—", visitId: v.id } : null;
-    }).filter(Boolean).sort((a, b) => a.fecha?.localeCompare(b.fecha));
-
-    // Estadísticas
-    const vals = dataPoints.map(d => d.val);
-    const n = vals.length;
-    const avg = n > 0 ? round(vals.reduce((a,b)=>a+b,0)/n, 2) : null;
-    const minV = n > 0 ? Math.min(...vals) : null;
-    const maxV = n > 0 ? Math.max(...vals) : null;
-    const sd = n > 1 ? round(Math.sqrt(vals.reduce((s,v)=>s+(v-avg)**2,0)/(n-1)),2) : null;
-
-    // Agrupado por cliente para comparación
-    const byClient = {};
-    dataPoints.forEach(d => {
-      if (!byClient[d.clientName]) byClient[d.clientName] = [];
-      byClient[d.clientName].push(d);
-    });
-
-    const chartH = 180;
-    const chartW = "100%";
-    const pad = { t: 20, b: 40, l: 50, r: 20 };
-    const minY = minV !== null ? Math.floor(minV * 0.95) : 0;
-    const maxY = maxV !== null ? Math.ceil(maxV * 1.05) : 10;
-    const rangeY = maxY - minY || 1;
-
-    const clientColors = ["#1565C0","#E76F51","#2D9CDB","#27AE60","#9B51E0","#F2994A","#EB5757","#219653"];
-
-    const toY = (val) => chartH - pad.b - ((val - minY) / rangeY) * (chartH - pad.t - pad.b);
-
-    return (
-      <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-        <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, marginBottom: 4 }}>Informes y Análisis</h2>
-        <p style={{ color: C.textLight, marginBottom: 24, fontSize: 14 }}>Seguimiento de indicadores técnicos por visita, cliente y período</p>
-
-        {/* Controles */}
-        <Card style={{ marginBottom: 20, padding: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Indicador</label>
-              <select value={infoMetric} onChange={e => setInfoMetric(e.target.value)} style={{ ...inputStyle, fontSize: 13 }}>
-                {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Cliente</label>
-              <select value={infoClient} onChange={e => setInfoClient(e.target.value)} style={{ ...inputStyle, fontSize: 13 }}>
-                <option value="all">Todos los clientes</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-            </div>
-          </div>
-        </Card>
-
-        {/* KPIs */}
-        {n > 0 && (
-          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-            {[
-              { label: "Registros", val: n, color: C.primary },
-              { label: "Promedio", val: avg, color: C.primary },
-              { label: "Mínimo", val: minV, color: C.accent },
-              { label: "Máximo", val: maxV, color: C.success },
-              { label: "Desvío std.", val: sd, color: "#7C3AED" },
-            ].map((k, i) => (
-              <div key={i} style={{ padding: "12px 20px", background: C.card, borderRadius: 10, border: `1px solid ${C.borderLight}`, textAlign: "center", minWidth: 90 }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.val ?? "—"}</div>
-                <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>{k.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {n === 0 ? (
-          <Card style={{ textAlign: "center", padding: 48 }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>📊</div>
-            <p style={{ color: C.textLight, fontSize: 15 }}>No hay datos para <b>{metric.label}</b> con los filtros seleccionados.</p>
-            <p style={{ color: C.textLight, fontSize: 13 }}>Cargá visitas con ese módulo para ver el análisis.</p>
-          </Card>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-
-            {/* Gráfico de evolución temporal */}
-            <Card style={{ gridColumn: infoClient !== "all" ? "1" : "1 / -1", padding: 20 }}>
-              <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>
-                Evolución temporal — {metric.label}
-              </h3>
-              <div style={{ overflowX: "auto" }}>
-                <svg width="100%" height={chartH} style={{ display: "block", minWidth: 320 }} viewBox={`0 0 600 ${chartH}`} preserveAspectRatio="xMidYMid meet">
-                  {/* Grid lines */}
-                  {[0, 0.25, 0.5, 0.75, 1].map(pct => {
-                    const y = pad.t + pct * (chartH - pad.t - pad.b);
-                    const val = round(maxY - pct * rangeY, 1);
-                    return (
-                      <g key={pct}>
-                        <line x1={pad.l} y1={y} x2={600 - pad.r} y2={y} stroke={C.borderLight} strokeWidth="1" />
-                        <text x={pad.l - 6} y={y + 4} fontSize="10" fill={C.textLight} textAnchor="end">{val}</text>
-                      </g>
-                    );
-                  })}
-
-                  {/* Líneas por cliente */}
-                  {Object.entries(byClient).map(([clientName, pts], ci) => {
-                    const color = clientColors[ci % clientColors.length];
-                    const xStep = pts.length > 1 ? (600 - pad.l - pad.r) / (pts.length - 1) : 0;
-                    const points = pts.map((d, i) => {
-                      const x = pad.l + i * xStep;
-                      const y = toY(d.val);
-                      return `${x},${y}`;
-                    });
-                    return (
-                      <g key={clientName}>
-                        {pts.length > 1 && <polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />}
-                        {pts.map((d, i) => {
-                          const x = pad.l + i * xStep;
-                          const y = toY(d.val);
-                          return (
-                            <g key={i}>
-                              <circle cx={x} cy={y} r="5" fill={color} stroke="#fff" strokeWidth="2" />
-                              <text x={x} y={y - 10} fontSize="10" fill={color} textAnchor="middle" fontWeight="600">{d.val}</text>
-                            </g>
-                          );
-                        })}
-                        {/* Fechas eje X */}
-                        {pts.map((d, i) => {
-                          const x = pad.l + i * xStep;
-                          return <text key={i} x={x} y={chartH - 6} fontSize="9" fill={C.textLight} textAnchor="middle">{fmt(d.fecha)}</text>;
-                        })}
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-
-              {/* Leyenda */}
-              {Object.keys(byClient).length > 1 && (
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
-                  {Object.keys(byClient).map((name, i) => (
-                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
-                      <div style={{ width: 12, height: 3, borderRadius: 2, background: clientColors[i % clientColors.length] }} />
-                      <span style={{ color: C.textLight }}>{name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-
-            {/* Tabla de valores */}
-            <Card style={{ padding: 20 }}>
-              <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>Detalle por visita</h3>
-              <div style={{ overflowY: "auto", maxHeight: 300 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: C.primary + "10" }}>
-                      <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600 }}>Cliente</th>
-                      <th style={{ padding: "6px 10px", textAlign: "center", fontWeight: 600 }}>Fecha</th>
-                      <th style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>Valor</th>
-                      <th style={{ padding: "6px 10px", textAlign: "center", fontWeight: 600 }}>vs Prom.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...dataPoints].reverse().map((d, i) => {
-                      const delta = avg !== null ? round(d.val - avg, 2) : null;
-                      return (
-                        <tr key={i} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
-                          <td style={{ padding: "6px 10px", fontWeight: 500 }}>{d.clientName}</td>
-                          <td style={{ padding: "6px 10px", textAlign: "center", color: C.textLight }}>{fmt(d.fecha)}</td>
-                          <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: C.primary }}>{d.val}</td>
-                          <td style={{ padding: "6px 10px", textAlign: "center" }}>
-                            {delta !== null && (
-                              <span style={{ fontSize: 12, fontWeight: 600, color: delta >= 0 ? C.success : C.accent }}>
-                                {delta > 0 ? "+" : ""}{delta}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-
-            {/* Comparación entre clientes (barras) */}
-            {Object.keys(byClient).length > 1 && (
-              <Card style={{ gridColumn: "1 / -1", padding: 20 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>Comparación entre clientes — último valor</h3>
-                <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-                  {Object.entries(byClient).map(([name, pts], i) => {
-                    const lastVal = pts[pts.length - 1]?.val;
-                    const barPct = maxV > 0 ? (lastVal / maxV) * 100 : 0;
-                    const color = clientColors[i % clientColors.length];
-                    return (
-                      <div key={name} style={{ flex: 1, minWidth: 80, textAlign: "center" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color, marginBottom: 4 }}>{lastVal}</div>
-                        <div style={{ height: 120, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-                          <div style={{
-                            width: 40, height: `${barPct}%`, minHeight: 4,
-                            background: color, borderRadius: "4px 4px 0 0",
-                            transition: "height 0.4s",
-                          }} />
-                        </div>
-                        <div style={{ fontSize: 11, color: C.textLight, marginTop: 4, wordBreak: "break-word" }}>{name}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  })();
+  // ── INFORMES ── (componente externo, ver debajo de DairyAuditApp)
+  const InformesView = (
+    <InformesPanel
+      clients={clients}
+      allVisitsCache={allVisitsCache}
+      infoClient={infoClient}
+      setInfoClient={setInfoClient}
+      infoMetric={infoMetric}
+      setInfoMetric={setInfoMetric}
+    />
+  );
 
   const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
 
