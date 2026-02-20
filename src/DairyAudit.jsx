@@ -322,20 +322,23 @@ const ESTRES_CALORICO_SECTIONS = [
 // ═══════════════════════════════════════════════════
 // INGREDIENT SELECTOR COMPONENT
 // ═══════════════════════════════════════════════════
-const IngredientSelector = ({ value = [], onChange, readOnly }) => {
+const IngredientSelector = ({ value = [], onChange, readOnly, extraData = {}, onExtraChange }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [filterCat, setFilterCat] = useState("Todos");
   const [filterText, setFilterText] = useState("");
 
+  // value is the array of ingredients; extraData holds loadOrder, mixTime, bladesCond
+  const items = Array.isArray(value) ? value : [];
+
   const addIngredient = (ing) => {
-    if (value.find(v => v.id === ing.id)) return;
-    onChange([...value, { id: ing.id, name: ing.name, kg_tal_cual: "", kg_ms: "", ms_pct: ing.ms_typical, category: ing.category }]);
+    if (items.find(v => v.id === ing.id)) return;
+    onChange([...items, { id: ing.id, name: ing.name, kg_tal_cual: "", kg_ms: "", ms_pct: ing.ms_typical, category: ing.category }]);
   };
 
-  const removeIngredient = (id) => onChange(value.filter(v => v.id !== id));
+  const removeIngredient = (id) => onChange(items.filter(v => v.id !== id));
 
   const updateIngredient = (id, field, val) => {
-    onChange(value.map(v => {
+    onChange(items.map(v => {
       if (v.id !== id) return v;
       const updated = { ...v, [field]: val };
       if (field === "kg_tal_cual" && updated.ms_pct) {
@@ -351,8 +354,8 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
     }));
   };
 
-  const totalTalCual = value.reduce((s, v) => s + (parseFloat(v.kg_tal_cual) || 0), 0);
-  const totalMS = value.reduce((s, v) => s + (parseFloat(v.kg_ms) || 0), 0);
+  const totalTalCual = items.reduce((s, v) => s + (parseFloat(v.kg_tal_cual) || 0), 0);
+  const totalMS = items.reduce((s, v) => s + (parseFloat(v.kg_ms) || 0), 0);
   const pctMS = totalTalCual > 0 ? round(totalMS / totalTalCual * 100, 1) : 0;
 
   const filtered = FEED_INGREDIENTS.filter(i => {
@@ -367,9 +370,9 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
   })).filter(g => g.items.length > 0);
 
   if (readOnly) {
-    if (!value.length) return <div style={{ color: C.textLight, fontStyle: "italic", padding: 8 }}>— Sin ingredientes cargados —</div>;
+    if (!items.length) return <div style={{ color: C.textLight, fontStyle: "italic", padding: 8 }}>— Sin ingredientes cargados —</div>;
     return (
-      <div>
+      <div style={{ display: "grid", gap: 12 }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -381,7 +384,7 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
               </tr>
             </thead>
             <tbody>
-              {value.map(v => (
+              {items.map(v => (
                 <tr key={v.id} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
                   <td style={{ padding: "6px 10px" }}>{v.name}</td>
                   <td style={{ padding: "6px 10px", textAlign: "right" }}>{v.kg_tal_cual || "—"}</td>
@@ -400,6 +403,14 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
             </tfoot>
           </table>
         </div>
+        {/* Mixing info readonly */}
+        {(extraData.loadOrder || extraData.mixTime || extraData.bladesCond) && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, background: C.bg, borderRadius: 8, padding: 12 }}>
+            {extraData.loadOrder && <div><span style={{ fontSize: 12, color: C.textLight, fontWeight: 600 }}>Orden de carga</span><p style={{ margin: "2px 0 0", fontSize: 13 }}>{extraData.loadOrder}</p></div>}
+            {extraData.mixTime && <div><span style={{ fontSize: 12, color: C.textLight, fontWeight: 600 }}>Tiempo de mezclado</span><p style={{ margin: "2px 0 0", fontSize: 13 }}>{extraData.mixTime} min</p></div>}
+            {extraData.bladesCond && <div><span style={{ fontSize: 12, color: C.textLight, fontWeight: 600 }}>Estado de cuchillas</span><p style={{ margin: "2px 0 0", fontSize: 13 }}>{extraData.bladesCond}</p></div>}
+          </div>
+        )}
       </div>
     );
   }
@@ -407,7 +418,7 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
   return (
     <div>
       {/* Current ingredients table */}
-      {value.length > 0 && (
+      {items.length > 0 && (
         <div style={{ overflowX: "auto", marginBottom: 12 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -420,7 +431,7 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
               </tr>
             </thead>
             <tbody>
-              {value.map(v => (
+              {items.map(v => (
                 <tr key={v.id} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
                   <td style={{ padding: "4px 10px" }}>
                     <span style={{ fontSize: 13 }}>{v.name}</span>
@@ -479,7 +490,7 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
               <div key={g.cat}>
                 <div style={{ padding: "6px 10px", fontSize: 11, fontWeight: 700, color: C.textLight, background: C.bg, textTransform: "uppercase", letterSpacing: 0.5, position: "sticky", top: 0 }}>{g.cat}</div>
                 {g.items.map(i => {
-                  const added = value.find(v => v.id === i.id);
+                  const added = items.find(v => v.id === i.id);
                   return (
                     <div key={i.id} onClick={() => !added && addIngredient(i)} style={{
                       padding: "8px 12px", cursor: added ? "default" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -493,6 +504,49 @@ const IngredientSelector = ({ value = [], onChange, readOnly }) => {
               </div>
             ))}
             {grouped.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.textLight, fontSize: 13 }}>No se encontraron ingredientes</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Mixing / Load order fields */}
+      {onExtraChange && (
+        <div style={{ marginTop: 16, padding: 14, background: C.bg, borderRadius: 10, border: `1px solid ${C.borderLight}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>Proceso de mezclado</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Orden de carga de ingredientes</label>
+              <textarea
+                value={extraData.loadOrder || ""}
+                onChange={e => onExtraChange({ ...extraData, loadOrder: e.target.value })}
+                placeholder="Ej: 1° heno, 2° silo maíz, 3° concentrado, 4° mineral..."
+                rows={2}
+                style={{ ...inputStyle, resize: "vertical", width: "100%", boxSizing: "border-box" }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Tiempo de mezclado (min)</label>
+              <input
+                type="number" min="0" step="1"
+                value={extraData.mixTime || ""}
+                onChange={e => onExtraChange({ ...extraData, mixTime: e.target.value })}
+                placeholder="Ej: 8"
+                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Estado de cuchillas</label>
+              <select
+                value={extraData.bladesCond || ""}
+                onChange={e => onExtraChange({ ...extraData, bladesCond: e.target.value })}
+                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+              >
+                <option value="">— Seleccionar —</option>
+                <option>Bueno (afiladas, sin desgaste)</option>
+                <option>Regular (leve desgaste)</option>
+                <option>Malo (desgaste marcado, requiere cambio)</option>
+                <option>No aplica / sin mixer</option>
+              </select>
+            </div>
           </div>
         </div>
       )}
@@ -741,6 +795,178 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
         {readOnly
           ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, fontSize: 14, border: `1px solid ${C.borderLight}`, whiteSpace: "pre-wrap" }}>{value.obs || "—"}</div>
           : <textarea value={value.obs || ""} onChange={e => onChange({ ...value, obs: e.target.value })} placeholder={`Observaciones sobre ${cfg.desc.toLowerCase()}...`} style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} />
+        }
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════
+// pH SCORING COMPONENT — medición por vaca con semáforo
+// ═══════════════════════════════════════════════════
+const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => {
+  const TARGET = [6.0, 6.5]; // rumen pH ideal preparto
+  const samples = value.samples || [];
+
+  const addSample = () => {
+    onChange({ ...value, samples: [...samples, { id: uid(), num: samples.length + 1, caravana: "", ph: "", nota: "" }] });
+  };
+  const updateSample = (id, field, val) => {
+    onChange({ ...value, samples: samples.map(s => s.id === id ? { ...s, [field]: val } : s) });
+  };
+  const removeSample = (id) => {
+    const updated = samples.filter(s => s.id !== id).map((s, i) => ({ ...s, num: i + 1 }));
+    onChange({ ...value, samples: updated });
+  };
+
+  const phVals = samples.map(s => parseFloat(s.ph)).filter(v => !isNaN(v));
+  const n = phVals.length;
+  const avg = n > 0 ? round(phVals.reduce((a, b) => a + b, 0) / n, 2) : null;
+  const minPH = n > 0 ? Math.min(...phVals) : null;
+  const maxPH = n > 0 ? Math.max(...phVals) : null;
+  const sd = n > 1 ? round(Math.sqrt(phVals.reduce((s, v) => s + (v - avg) ** 2, 0) / (n - 1)), 2) : null;
+  const pctBajo60 = n > 0 ? round(phVals.filter(v => v < 6.0).length / n * 100, 1) : null;
+  const pctBajo58 = n > 0 ? round(phVals.filter(v => v < 5.8).length / n * 100, 1) : null;
+  const pctOk = n > 0 ? round(phVals.filter(v => v >= TARGET[0] && v <= TARGET[1]).length / n * 100, 1) : null;
+
+  const phColor = (ph) => {
+    const v = parseFloat(ph);
+    if (isNaN(v)) return C.textLight;
+    if (v >= 6.0) return C.success;
+    if (v >= 5.8) return C.warning;
+    return C.danger;
+  };
+  const phEmoji = (ph) => {
+    const v = parseFloat(ph);
+    if (isNaN(v)) return "";
+    if (v >= 6.0) return "🟢";
+    if (v >= 5.8) return "🟡";
+    return "🔴";
+  };
+
+  const globalSemaforo = avg === null ? null : avg >= 6.0 ? "🟢" : avg >= 5.8 ? "🟡" : "🔴";
+  const globalColor = avg === null ? C.textLight : avg >= 6.0 ? C.success : avg >= 5.8 ? C.warning : C.danger;
+
+  const StatBox = ({ label, val, color, unit = "" }) => (
+    <div style={{ textAlign: "center", padding: "8px 12px", background: (color || C.primary) + "10", borderRadius: 8, minWidth: 70 }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: color || C.primary }}>{val !== null && val !== undefined ? val : "—"}{unit}</div>
+      <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>{label}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: C.textLight, margin: "0 0 10px", fontStyle: "italic" }}>pH ruminal por vaca. Objetivo: 6.0–6.5. 🟢 ≥6.0 | 🟡 5.8–5.99 | 🔴 &lt;5.8 (riesgo SARA)</p>
+
+      {n > 0 && (
+        <>
+          {/* Semáforo global */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, padding: "10px 16px", background: globalColor + "12", borderRadius: 10, border: `1.5px solid ${globalColor}40` }}>
+            <span style={{ fontSize: 28 }}>{globalSemaforo}</span>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: globalColor }}>pH promedio: {avg}</div>
+              <div style={{ fontSize: 12, color: C.textLight }}>Objetivo: {TARGET[0]}–{TARGET[1]} | {n} vacas evaluadas</div>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+            <StatBox label="Mínimo" val={minPH} color={phColor(minPH)} />
+            <StatBox label="Máximo" val={maxPH} color={phColor(maxPH)} />
+            <StatBox label="Desvío" val={sd} color="#7C3AED" />
+            <StatBox label="🔴 <5.8" val={pctBajo58} color={pctBajo58 > 20 ? C.danger : C.success} unit="%" />
+            <StatBox label="🟡 <6.0" val={pctBajo60} color={pctBajo60 > 30 ? C.warning : C.success} unit="%" />
+            <StatBox label="🟢 En rango" val={pctOk} color={pctOk >= 70 ? C.success : C.warning} unit="%" />
+          </div>
+
+          {/* Distribución visual */}
+          {n >= 3 && (() => {
+            const buckets = [
+              { label: "<5.6", min: 0, max: 5.6, color: C.danger },
+              { label: "5.6-5.8", min: 5.6, max: 5.8, color: "#E53E3E" },
+              { label: "5.8-6.0", min: 5.8, max: 6.0, color: C.warning },
+              { label: "6.0-6.3", min: 6.0, max: 6.3, color: C.success },
+              { label: "6.3-6.5", min: 6.3, max: 6.5, color: "#22C55E" },
+              { label: ">6.5", min: 6.5, max: 99, color: C.primary },
+            ];
+            const counts = buckets.map(b => ({ ...b, count: phVals.filter(v => v >= b.min && v < b.max).length }));
+            const maxCount = Math.max(...counts.map(b => b.count), 1);
+            return (
+              <div style={{ marginBottom: 14, padding: 10, background: C.bg, borderRadius: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: C.textLight }}>Distribución por rango de pH</div>
+                <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 50 }}>
+                  {counts.map(b => (
+                    <div key={b.label} style={{ flex: 1, textAlign: "center" }}>
+                      <div style={{ height: Math.max((b.count / maxCount) * 44, b.count > 0 ? 4 : 0), background: b.color, borderRadius: "4px 4px 0 0", transition: "height 0.3s", margin: "0 1px" }} />
+                      <div style={{ fontSize: 9, color: C.textLight, marginTop: 2 }}>{b.label}</div>
+                      <div style={{ fontSize: 9, color: C.textLight }}>{b.count > 0 ? `${b.count}x` : ""}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      )}
+
+      {/* Tabla de muestras */}
+      {samples.length > 0 && (
+        <div style={{ overflowX: "auto", marginBottom: 10 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.primary + "10" }}>
+                <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 36 }}>#</th>
+                <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>Caravana / ID</th>
+                <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 100 }}>pH</th>
+                <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 40 }}></th>
+                <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>Nota</th>
+                {!readOnly && <th style={{ width: 32 }}></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {samples.map(s => {
+                const v = parseFloat(s.ph);
+                return (
+                  <tr key={s.id} style={{ borderBottom: `1px solid ${C.borderLight}`, background: !isNaN(v) && v < 5.8 ? C.danger + "08" : !isNaN(v) && v < 6.0 ? C.warning + "08" : "transparent" }}>
+                    <td style={{ padding: "4px 8px", textAlign: "center", color: C.textLight, fontSize: 12 }}>{s.num}</td>
+                    <td style={{ padding: "4px 4px" }}>
+                      {readOnly ? <span>{s.caravana || "—"}</span>
+                        : <input type="text" value={s.caravana} onChange={e => updateSample(s.id, "caravana", e.target.value)} placeholder="N° caravana" style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />}
+                    </td>
+                    <td style={{ padding: "4px 4px", textAlign: "center" }}>
+                      {readOnly ? <span style={{ fontWeight: 700, color: phColor(s.ph) }}>{s.ph || "—"}</span>
+                        : <input type="number" min="5.0" max="7.5" step="0.1" value={s.ph} onChange={e => updateSample(s.id, "ph", e.target.value)} placeholder="pH" style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, textAlign: "center", width: 80, fontWeight: 700, color: phColor(s.ph) }} />}
+                    </td>
+                    <td style={{ padding: "4px 4px", textAlign: "center", fontSize: 16 }}>{phEmoji(s.ph)}</td>
+                    <td style={{ padding: "4px 4px" }}>
+                      {readOnly ? <span style={{ fontSize: 12 }}>{s.nota || "—"}</span>
+                        : <input type="text" value={s.nota || ""} onChange={e => updateSample(s.id, "nota", e.target.value)} placeholder="Obs..." style={{ ...inputStyle, padding: "5px 8px", fontSize: 12 }} />}
+                    </td>
+                    {!readOnly && (
+                      <td style={{ padding: "4px 4px" }}>
+                        <button onClick={() => removeSample(s.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}><Icon name="x" size={14} color={C.danger} /></button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!readOnly && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="outline" size="sm" icon="plus" onClick={addSample}>Agregar muestra</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => { for (let i = 0; i < 5; i++) addSample(); }}>+5 muestras</Btn>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        <label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Observaciones pH</label>
+        {readOnly
+          ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, fontSize: 14, border: `1px solid ${C.borderLight}`, whiteSpace: "pre-wrap" }}>{value.obs || "—"}</div>
+          : <textarea value={value.obs || ""} onChange={e => onChange({ ...value, obs: e.target.value })} placeholder="Distribución, posibles causas de acidez, relación con dieta..." style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} />
         }
       </div>
     </div>
@@ -1127,14 +1353,9 @@ const PREPARTO_SECTIONS = [
     ],
   },
   {
-    id: "ph", title: "c) Evaluación de pH", subtitle: "Promedio, rango y distribución de valores",
-    fields: [
-      { id: "ph_promedio", label: "pH Promedio", type: "number", placeholder: "Ej: 6.2", step: "0.1" },
-      { id: "ph_minimo", label: "pH Mínimo", type: "number", placeholder: "Ej: 5.8", step: "0.1" },
-      { id: "ph_maximo", label: "pH Máximo", type: "number", placeholder: "Ej: 6.8", step: "0.1" },
-      { id: "ph_n_muestras", label: "N° de muestras", type: "number", placeholder: "Ej: 10" },
-      { id: "ph_distribucion", label: "Distribución / Observaciones", type: "textarea", placeholder: "% por debajo de 6.0, etc." },
-    ],
+    id: "ph", title: "c) Evaluación de pH ruminal", subtitle: "Medición vaca por vaca con semáforo automático (target: 6.0–6.5)",
+    customComponent: "ph_scoring",
+    fields: [],
   },
   {
     id: "penn_state", title: "d) Separador Penn State", subtitle: "Distribución de partículas y evidencia de selección (sorting)",
@@ -1164,6 +1385,8 @@ const PREPARTO_SECTIONS = [
       { id: "inst_camas_tipo", label: "Tipo de cama / descanso", type: "text", placeholder: "Ej: Arena, compost, pasto..." },
       { id: "inst_camas_estado", label: "Estado de las camas", type: "select", options: ["Excelente", "Bueno", "Regular", "Malo"] },
       { id: "inst_ventilacion", label: "Ventilación / sombra", type: "select", options: ["Adecuada", "Parcialmente adecuada", "Inadecuada"] },
+      { id: "inst_pushup_freq", label: "🍽️ Frecuencia de push-up (empuje comida)", type: "select", options: ["Cada 1h", "Cada 1-2h", "Cada 2-4h", ">4h", "No se empuja"] },
+      { id: "inst_pushup_quien", label: "¿Quién realiza el push-up?", type: "select", options: ["Operario dedicado", "Al momento del ordeñe", "Automático / robot", "No aplica"] },
       { id: "inst_observaciones", label: "Observaciones instalaciones", type: "textarea", placeholder: "Barro, hacinamiento, accesos..." },
     ],
   },
@@ -1235,7 +1458,8 @@ const FRESCAS_SECTIONS = [
     { id: "fr_corral_obs", label: "Observaciones del corral", type: "textarea", placeholder: "Accesos, sombra, pisos, problemas..." },
   ]},
   { id: "fr_dieta", title: "5. Dieta de frescas + manejo + protocolo", subtitle: "Composición, empuje, horarios, cambios de dieta, consistencia mezclado, fibra efectiva", customComponent: "ingredients", fields: [
-    { id: "fr_dieta_empuje", label: "Rutina de empuje de comida", type: "select", options: ["Cada 1-2h", "Cada 2-4h", ">4h", "No se empuja", "No aplica"] },
+    { id: "fr_dieta_empuje", label: "🍽️ Push-up / Empuje de comida (frecuencia)", type: "select", options: ["Cada 1h", "Cada 1-2h", "Cada 2-4h", ">4h", "No se empuja", "No aplica"] },
+    { id: "fr_dieta_pushup_quien", label: "¿Quién realiza el push-up?", type: "select", options: ["Operario dedicado", "Al momento del ordeñe", "Automático / robot", "No aplica"] },
     { id: "fr_dieta_horarios", label: "Horarios de entrega", type: "text", placeholder: "Ej: 6:00, 14:00, 20:00" },
     { id: "fr_dieta_freq_entrega", label: "Frecuencia de entrega", type: "select", options: ["1x/día", "2x/día", "3x/día", ">3x/día"] },
     { id: "fr_dieta_cambio", label: "Manejo de cambios de dieta (close-up → fresh → alta)", type: "textarea", placeholder: "Días en cada etapa, transición gradual o abrupta..." },
@@ -1810,6 +2034,11 @@ const generateTextReport = (visit, client, category) => {
         const totalMS = ings.reduce((s, i) => s + (parseFloat(i.kg_ms) || 0), 0);
         txt += `  ${"TOTAL".padEnd(32)} ${round(totalTC, 1).toString().padStart(6)} ${(totalTC > 0 ? round(totalMS / totalTC * 100, 1) + "%" : "-").padStart(5)}  ${round(totalMS, 1).toString().padStart(6)}\n\n`;
       }
+      const mix = visit.data?.[`${sec.id}_mix`];
+      if (mix?.loadOrder) txt += `  Orden de carga: ${mix.loadOrder}\n`;
+      if (mix?.mixTime) txt += `  Tiempo de mezclado: ${mix.mixTime} min\n`;
+      if (mix?.bladesCond) txt += `  Estado de cuchillas: ${mix.bladesCond}\n`;
+      if (mix?.loadOrder || mix?.mixTime || mix?.bladesCond) txt += "\n";
     }
 
     // Penn State
@@ -2149,6 +2378,173 @@ const makeDownloadReport = (currentClient, flashFn) => (visit, type) => {
       downloadFile(generateCSV(visit, currentClient, cat), `${name}.csv`, "text/csv;charset=utf-8");
     }
   };
+// ═══════════════════════════════════════════════════
+// SCORE GLOBAL PREPARTO — cálculo 0-100
+// ═══════════════════════════════════════════════════
+const calcPrepartoScore = (data) => {
+  if (!data) return null;
+  const pillars = [];
+
+  // ── PILAR 1: Consumo / Acceso (25 pts) ──
+  const p1 = [];
+  const comedero = parseFloat(data.inst_espacio_comedero_cm);
+  if (!isNaN(comedero)) p1.push({ label: "Espacio comedero", pts: comedero >= 76 ? 8 : comedero >= 60 ? 5 : 2, max: 8, val: `${comedero} cm` });
+  const densidad = parseFloat(data.inst_densidad_pct);
+  if (!isNaN(densidad)) p1.push({ label: "Densidad lote", pts: densidad <= 85 ? 7 : densidad <= 100 ? 4 : 1, max: 7, val: `${densidad}%` });
+  const pushup = data.inst_pushup_freq || "";
+  const pushupPts = pushup.includes("1h") ? 10 : pushup.includes("1-2h") ? 8 : pushup.includes("2-4h") ? 5 : pushup.includes(">4h") ? 2 : pushup === "No se empuja" ? 0 : null;
+  if (pushupPts !== null) p1.push({ label: "Push-up", pts: pushupPts, max: 10, val: pushup });
+  const p1score = p1.length > 0 ? Math.round(p1.reduce((a, b) => a + b.pts, 0) / p1.reduce((a, b) => a + b.max, 0) * 25) : null;
+  pillars.push({ label: "Consumo / Acceso", score: p1score, max: 25, detail: p1, icon: "🍽️" });
+
+  // ── PILAR 2: Confort / Agua (25 pts) ──
+  const p2 = [];
+  const agua = parseFloat(data.agua_cm_lineales);
+  if (!isNaN(agua)) p2.push({ label: "cm agua/vaca", pts: agua >= 10 ? 8 : agua >= 7 ? 5 : 2, max: 8, val: `${agua} cm` });
+  const limpiezaAgua = data.agua_limpieza || "";
+  const limpPts = limpiezaAgua === "Limpia" ? 7 : limpiezaAgua === "Aceptable" ? 5 : limpiezaAgua === "Sucia" ? 2 : null;
+  if (limpPts !== null) p2.push({ label: "Limpieza agua", pts: limpPts, max: 7, val: limpiezaAgua });
+  const ventil = data.inst_ventilacion || "";
+  const ventPts = ventil === "Adecuada" ? 10 : ventil === "Parcialmente adecuada" ? 5 : ventil === "Inadecuada" ? 1 : null;
+  if (ventPts !== null) p2.push({ label: "Ventilación", pts: ventPts, max: 10, val: ventil });
+  const p2score = p2.length > 0 ? Math.round(p2.reduce((a, b) => a + b.pts, 0) / p2.reduce((a, b) => a + b.max, 0) * 25) : null;
+  pillars.push({ label: "Confort / Agua", score: p2score, max: 25, detail: p2, icon: "💧" });
+
+  // ── PILAR 3: Indicadores animales (25 pts) ──
+  const p3 = [];
+  const bcsCows = data.bcs_cowscore?.cows || [];
+  if (bcsCows.length > 0) {
+    const bcsVals = bcsCows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+    const bcsAvg = bcsVals.reduce((a, b) => a + b, 0) / bcsVals.length;
+    const bcsPts = bcsAvg >= 3.0 && bcsAvg <= 3.5 ? 10 : bcsAvg >= 2.75 && bcsAvg <= 3.75 ? 7 : 3;
+    p3.push({ label: "BCS promedio", pts: bcsPts, max: 10, val: round(bcsAvg, 2) });
+  }
+  const hecesCows = data.heces_cowscore?.cows || [];
+  if (hecesCows.length > 0) {
+    const hVals = hecesCows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+    const hAvg = hVals.reduce((a, b) => a + b, 0) / hVals.length;
+    const hPts = hAvg >= 3.0 && hAvg <= 3.5 ? 8 : hAvg >= 2.5 && hAvg <= 4.0 ? 5 : 2;
+    p3.push({ label: "Score heces", pts: hPts, max: 8, val: round(hAvg, 2) });
+  }
+  const rumenCows = data.llenado_ruminal_cowscore?.cows || [];
+  if (rumenCows.length > 0) {
+    const rVals = rumenCows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+    const rAvg = rVals.reduce((a, b) => a + b, 0) / rVals.length;
+    const rPts = rAvg >= 3.5 && rAvg <= 4.5 ? 7 : rAvg >= 3.0 ? 4 : 1;
+    p3.push({ label: "Llenado ruminal", pts: rPts, max: 7, val: round(rAvg, 2) });
+  }
+  const p3score = p3.length > 0 ? Math.round(p3.reduce((a, b) => a + b.pts, 0) / p3.reduce((a, b) => a + b.max, 0) * 25) : null;
+  pillars.push({ label: "Indicadores animales", score: p3score, max: 25, detail: p3, icon: "🐄" });
+
+  // ── PILAR 4: TMR / Partículas (25 pts) ──
+  const p4 = [];
+  const phSamples = data.ph_ph?.samples || [];
+  if (phSamples.length > 0) {
+    const phVals = phSamples.map(s => parseFloat(s.ph)).filter(v => !isNaN(v));
+    const phAvg = phVals.reduce((a, b) => a + b, 0) / phVals.length;
+    const phPts = phAvg >= 6.0 ? 10 : phAvg >= 5.8 ? 6 : 2;
+    p4.push({ label: "pH ruminal", pts: phPts, max: 10, val: round(phAvg, 2) });
+  }
+  const psData = data.penn_state_pennstate;
+  if (psData?.sup_avg) {
+    const supPct = parseFloat(psData.sup_avg);
+    const fndPct = parseFloat(psData.fondo_avg);
+    const supPts = supPct >= 2 && supPct <= 8 ? 8 : supPct >= 1 && supPct <= 12 ? 5 : 2;
+    p4.push({ label: "Penn State sup", pts: supPts, max: 8, val: `${supPct}%` });
+    if (!isNaN(fndPct)) {
+      const fndPts = fndPct >= 8 && fndPct <= 20 ? 7 : fndPct >= 5 && fndPct <= 25 ? 4 : 1;
+      p4.push({ label: "Penn State fondo", pts: fndPts, max: 7, val: `${fndPct}%` });
+    }
+  }
+  const p4score = p4.length > 0 ? Math.round(p4.reduce((a, b) => a + b.pts, 0) / p4.reduce((a, b) => a + b.max, 0) * 25) : null;
+  pillars.push({ label: "TMR / Partículas", score: p4score, max: 25, detail: p4, icon: "🌾" });
+
+  const totalPillarsWithData = pillars.filter(p => p.score !== null);
+  const totalScore = totalPillarsWithData.length > 0
+    ? Math.round(totalPillarsWithData.reduce((a, p) => a + p.score, 0) / totalPillarsWithData.length / 25 * 100)
+    : null;
+
+  return { pillars, totalScore };
+};
+
+function PrepartoScoreCard({ data }) {
+  const [expanded, setExpanded] = useState(null);
+  const result = calcPrepartoScore(data);
+  if (!result) return null;
+  const { pillars, totalScore } = result;
+  if (totalScore === null) return null;
+
+  const scoreEmoji = totalScore >= 80 ? "🟢" : totalScore >= 60 ? "🟡" : "🔴";
+  const scoreColor = totalScore >= 80 ? C.success : totalScore >= 60 ? C.warning : C.danger;
+  const scoreLabel = totalScore >= 80 ? "Buen estado" : totalScore >= 60 ? "Atención requerida" : "Crítico";
+
+  return (
+    <div style={{ background: C.card, borderRadius: 14, border: `2px solid ${scoreColor}40`, overflow: "hidden", marginTop: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+      {/* Header con score global */}
+      <div style={{ padding: "16px 20px", background: scoreColor + "10", borderBottom: `1px solid ${scoreColor}25`, display: "flex", alignItems: "center", gap: 16 }}>
+        <span style={{ fontSize: 36 }}>{scoreEmoji}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: scoreColor, textTransform: "uppercase", letterSpacing: 0.5 }}>Score Global Preparto</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 36, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{totalScore}</span>
+            <span style={{ fontSize: 16, color: C.textLight }}>/100</span>
+          </div>
+          <div style={{ fontSize: 13, color: scoreColor, fontWeight: 600 }}>{scoreLabel}</div>
+        </div>
+        {/* Mini barra total */}
+        <div style={{ width: 100 }}>
+          <div style={{ height: 8, background: C.borderLight, borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${totalScore}%`, background: scoreColor, borderRadius: 4, transition: "width 0.5s" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Pilares */}
+      <div style={{ padding: "12px 20px" }}>
+        {pillars.map((p, i) => {
+          if (p.score === null) return null;
+          const pEmoji = p.score >= 20 ? "🟢" : p.score >= 14 ? "🟡" : "🔴";
+          const pColor = p.score >= 20 ? C.success : p.score >= 14 ? C.warning : C.danger;
+          const isExp = expanded === i;
+          return (
+            <div key={i} style={{ marginBottom: 8 }}>
+              <div onClick={() => setExpanded(isExp ? null : i)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 0" }}>
+                <span style={{ fontSize: 18 }}>{p.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{p.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: pColor }}>{pEmoji} {p.score}/25</span>
+                  </div>
+                  <div style={{ height: 6, background: C.borderLight, borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${(p.score / 25) * 100}%`, background: pColor, borderRadius: 3, transition: "width 0.4s" }} />
+                  </div>
+                </div>
+                <span style={{ fontSize: 12, color: C.textLight }}>{isExp ? "▲" : "▼"}</span>
+              </div>
+              {isExp && p.detail.length > 0 && (
+                <div style={{ marginLeft: 28, marginBottom: 8, padding: "8px 12px", background: C.bg, borderRadius: 8 }}>
+                  {p.detail.map((d, j) => (
+                    <div key={j} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0", borderBottom: j < p.detail.length - 1 ? `1px solid ${C.borderLight}` : "none" }}>
+                      <span style={{ color: C.textLight }}>{d.label}</span>
+                      <span>
+                        <span style={{ color: C.text, fontWeight: 600 }}>{d.val}</span>
+                        <span style={{ marginLeft: 8, color: d.pts >= d.max * 0.7 ? C.success : d.pts >= d.max * 0.4 ? C.warning : C.danger, fontWeight: 700 }}>{d.pts}/{d.max} pts</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div style={{ fontSize: 11, color: C.textLight, textAlign: "center", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.borderLight}` }}>
+          Score basado en los datos completados. Más secciones = mayor precisión.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════
 // METRICS CONFIG (fuera de cualquier componente)
 // ═══════════════════════════════════════════════════
@@ -2523,6 +2919,9 @@ export default function DairyAuditApp() {
   const [infoClient, setInfoClient] = useState("all");
   const [infoMetric, setInfoMetric] = useState("bcs");
   const [allVisitsCache, setAllVisitsCache] = useState([]);
+  const [activeSections, setActiveSections] = useState(null); // null = todas activas
+  const [clientTemplate, setClientTemplate] = useState(null); // plantilla guardada del cliente
+  const [prevVisit, setPrevVisit] = useState(null); // visita anterior para comparación
 
   const toggleSection = (secId) => {
     setExpandedSections(prev => ({ ...prev, [secId]: !prev[secId] }));
@@ -2846,8 +3245,8 @@ const Toast = msg && (
   );
   const Nav = (
     <div style={{ display: "flex", gap: 4, padding: "10px 28px", background: "#fff", borderBottom: `1px solid ${C.borderLight}`, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-      <Btn variant={vw === "dashboard" ? "primary" : "ghost"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); }}>Inicio</Btn>
-      <Btn variant={["clients","clientDetail","newClient","newVisit","viewVisit"].includes(vw) ? "primary" : "ghost"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn>
+      <Btn variant={vw === "dashboard" ? "primary" : "ghost"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); setSelCat(null); setSelVisit(null); }}>Inicio</Btn>
+      <Btn variant={["clients","clientDetail","newClient","newVisit","viewVisit","startVisit"].includes(vw) ? "primary" : "ghost"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn>
       <Btn variant={vw === "informes" ? "primary" : "ghost"} size="sm" icon="chart" onClick={() => setVw("informes")}>Informes</Btn>
     </div>
   );
@@ -2941,8 +3340,25 @@ const fetchVisits = async (clientId) => {
       <h3 style={{ margin: "0 0 12px", fontSize: 18 }}>Nueva visita</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 32 }}>
         {CATEGORIES.map(cat => (
-          <Card key={cat.id} onClick={() => { setSelCat(cat); setFormData({ _fecha: today() }); setSelVisit(null); const exp = {}; cat.sections.forEach(s => { exp[s.id] = true; }); setExpandedSections(exp); setVw("newVisit"); }} style={{ borderLeft: `4px solid ${cat.color}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}><div style={{ width: 40, height: 40, borderRadius: 8, background: cat.color + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={cat.icon} color={cat.color} /></div><div><div style={{ fontWeight: 600 }}>{cat.name}</div><div style={{ fontSize: 12, color: C.textLight }}>{cat.sections.length} secciones</div></div></div>
+          <Card key={cat.id} onClick={() => {
+            setSelCat(cat);
+            setFormData({ _fecha: today() });
+            setSelVisit(null);
+            setActiveSections(cat.sections.map(s => s.id)); // todas activas por defecto
+            // Cargar visita anterior del mismo módulo para este cliente
+            const clientVisits = visits.filter(v => selClient && v.client_id === selClient.id && (v.categoryId || v.category_id) === cat.id);
+            const sorted = [...clientVisits].sort((a, b) => b.fecha.localeCompare(a.fecha));
+            setPrevVisit(sorted[0] || null);
+            setVw("startVisit");
+          }} style={{ borderLeft: `4px solid ${cat.color}`, cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: cat.color + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={cat.icon} color={cat.color} /></div>
+              <div>
+                <div style={{ fontWeight: 600 }}>{cat.name}</div>
+                <div style={{ fontSize: 12, color: C.textLight }}>{cat.sections.length} secciones</div>
+              </div>
+              <div style={{ marginLeft: "auto", color: cat.color, fontSize: 18 }}>›</div>
+            </div>
           </Card>
         ))}
       </div>
@@ -2974,6 +3390,93 @@ const fetchVisits = async (clientId) => {
   );
 
 
+  // ── START VISIT (checklist de secciones) ──
+  const StartVisit = selCat && (
+    <div style={{ padding: "24px 32px", maxWidth: 700, margin: "0 auto", width: "100%" }}>
+      <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clientDetail")} style={{ marginBottom: 16 }}>Volver</Btn>
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+        <div style={{ width: 52, height: 52, borderRadius: 12, background: selCat.color + "18", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name={selCat.icon} color={selCat.color} size={26} />
+        </div>
+        <div>
+          <h2 style={{ fontFamily: ffSerif, fontSize: 22, margin: 0 }}>Nueva visita — {selCat.name}</h2>
+          <p style={{ color: C.textLight, margin: "4px 0 0", fontSize: 14 }}>{selClient?.nombre} · {selClient?.establecimiento}</p>
+        </div>
+      </div>
+
+      {/* Fecha */}
+      <Card style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 6 }}>Fecha de la visita</label>
+        <input type="date" value={formData._fecha || today()} onChange={e => setFormData(f => ({ ...f, _fecha: e.target.value }))} style={{ ...inputStyle, maxWidth: 220 }} />
+      </Card>
+
+      {/* Checklist de secciones */}
+      <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, overflow: "hidden", marginBottom: 20 }}>
+        <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>¿Qué vas a evaluar hoy?</div>
+            <div style={{ fontSize: 12, color: C.textLight, marginTop: 2 }}>Destildá lo que no vas a hacer. Todo activo por defecto.</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setActiveSections(selCat.sections.map(s => s.id))} style={{ fontSize: 12, color: C.primary, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Todos</button>
+            <button onClick={() => setActiveSections([])} style={{ fontSize: 12, color: C.textLight, background: "none", border: "none", cursor: "pointer" }}>Ninguno</button>
+          </div>
+        </div>
+        {selCat.sections.map((sec, i) => {
+          const isActive = (activeSections || []).includes(sec.id);
+          return (
+            <div key={sec.id} onClick={() => setActiveSections(prev => {
+              const curr = prev || selCat.sections.map(s => s.id);
+              return curr.includes(sec.id) ? curr.filter(id => id !== sec.id) : [...curr, sec.id];
+            })} style={{
+              display: "flex", alignItems: "center", gap: 14, padding: "13px 20px",
+              borderBottom: i < selCat.sections.length - 1 ? `1px solid ${C.borderLight}` : "none",
+              cursor: "pointer", background: isActive ? "#fff" : C.bg, transition: "background 0.15s",
+            }}>
+              {/* Checkbox */}
+              <div style={{
+                width: 22, height: 22, borderRadius: 6, border: `2px solid ${isActive ? selCat.color : C.border}`,
+                background: isActive ? selCat.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s",
+              }}>
+                {isActive && <svg width="12" height="10" viewBox="0 0 12 10"><path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="2.2" fill="none" strokeLinecap="round" /></svg>}
+              </div>
+              <div style={{ flex: 1, opacity: isActive ? 1 : 0.45 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>{sec.title}</div>
+                {sec.subtitle && <div style={{ fontSize: 12, color: C.textLight, marginTop: 1 }}>{sec.subtitle}</div>}
+              </div>
+              <div style={{ fontSize: 12, color: C.textLight, flexShrink: 0 }}>
+                {sec.customComponent ? "🔧 Componente" : `${sec.fields.length} campos`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Resumen */}
+      <div style={{ fontSize: 13, color: C.textLight, marginBottom: 20, textAlign: "center" }}>
+        {(activeSections || []).length} de {selCat.sections.length} secciones seleccionadas
+      </div>
+
+      {/* Botón comenzar */}
+      <Btn
+        size="lg"
+        onClick={() => {
+          const acts = activeSections || selCat.sections.map(s => s.id);
+          const exp = {};
+          acts.forEach(id => { exp[id] = true; });
+          setExpandedSections(exp);
+          setVw("newVisit");
+        }}
+        style={{ width: "100%", justifyContent: "center", padding: "14px 0", fontSize: 16 }}
+        disabled={(activeSections || []).length === 0}
+      >
+        Comenzar recorrido →
+      </Btn>
+    </div>
+  );
+
   // ── VISIT FORM ──
   const VisitForm = selCat && (
     <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
@@ -2994,17 +3497,93 @@ const fetchVisits = async (clientId) => {
         </div>
       </Card>
 
-      {selCat.sections.map(sec => {
+      {selCat.sections.filter(sec => {
+        if (!activeSections) return true;
+        return activeSections.includes(sec.id);
+      }).map((sec, secIdx, visibleSecs) => {
         const isExpanded = expandedSections[sec.id] !== false;
         const ro = vw === "viewVisit";
+        const hasData = sec.customComponent
+          ? !!formData[`${sec.id}_${sec.customComponent.replace("cowscore_","").replace("ph_scoring","ph")}`]
+          : sec.fields.some(f => !!formData[f.id]);
         return (
           <Card key={sec.id} style={{ marginBottom: 12, borderLeft: `4px solid ${selCat.color}` }}>
             <div onClick={() => toggleSection(sec.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: isExpanded ? 16 : 0 }}>
-              <div><h4 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{sec.title}</h4><p style={{ margin: "2px 0 0", fontSize: 13, color: C.textLight }}>{sec.subtitle}</p></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", background: hasData ? selCat.color : C.borderLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, fontWeight: 700, color: hasData ? "#fff" : C.textLight }}>{secIdx + 1}</div>
+                <div><h4 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{sec.title}</h4><p style={{ margin: "2px 0 0", fontSize: 13, color: C.textLight }}>{sec.subtitle}</p></div>
+              </div>
               <span style={{ fontSize: 18, color: C.textLight, transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
             </div>
             {isExpanded && (
               <div style={{ display: "grid", gap: 14 }}>
+                {/* ── Comparación vs visita anterior (solo en modo nueva/editar) ── */}
+                {prevVisit && vw !== "viewVisit" && (() => {
+                  const pd = prevVisit.data || {};
+                  const chips = [];
+                  // Campos numéricos de la sección
+                  sec.fields.forEach(f => {
+                    if (f.type === "number" && pd[f.id] != null && pd[f.id] !== "") {
+                      const curr = formData[f.id];
+                      const prev = parseFloat(pd[f.id]);
+                      if (curr != null && curr !== "" && !isNaN(parseFloat(curr))) {
+                        const delta = round(parseFloat(curr) - prev, 2);
+                        const icon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+                        const col = delta === 0 ? C.textLight : (delta > 0 ? C.success : C.danger);
+                        chips.push({ label: f.label.replace(/\(.*?\)/g, "").trim(), prev: `${prev}${f.unit || ""}`, curr: `${curr}${f.unit || ""}`, delta: `${delta > 0 ? "+" : ""}${delta}${f.unit || ""}`, icon, col });
+                      } else {
+                        chips.push({ label: f.label.replace(/\(.*?\)/g, "").trim(), prev: `${prev}${f.unit || ""}`, curr: null, col: C.textLight });
+                      }
+                    }
+                  });
+                  // CowScore: promedios
+                  if (sec.customComponent?.startsWith("cowscore_")) {
+                    const prevCs = pd[`${sec.id}_cowscore`];
+                    const currCs = formData[`${sec.id}_cowscore`];
+                    if (prevCs?.cows?.length) {
+                      const prevAvg = round(prevCs.cows.map(c => parseFloat(c.score)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                      const label = "Prom. " + sec.title.replace(/[a-z]\)\s*/i, "").trim();
+                      if (currCs?.cows?.length) {
+                        const currAvg = round(currCs.cows.map(c => parseFloat(c.score)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                        const delta = round(currAvg - prevAvg, 2);
+                        const icon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+                        const col = delta === 0 ? C.textLight : (delta > 0 ? C.success : C.danger);
+                        chips.push({ label, prev: String(prevAvg), curr: String(currAvg), delta: `${delta >= 0 ? "+" : ""}${delta}`, icon, col });
+                      } else {
+                        chips.push({ label, prev: String(prevAvg), curr: null, col: C.textLight });
+                      }
+                    }
+                  }
+                  // pH
+                  if (sec.customComponent === "ph_scoring") {
+                    const prevPh = pd[`${sec.id}_ph`];
+                    if (prevPh?.samples?.length) {
+                      const prevAvg = round(prevPh.samples.map(s => parseFloat(s.ph)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                      const currPh = formData[`${sec.id}_ph`];
+                      if (currPh?.samples?.length) {
+                        const currAvg = round(currPh.samples.map(s => parseFloat(s.ph)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                        const delta = round(currAvg - prevAvg, 2);
+                        const icon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+                        const col = delta === 0 ? C.textLight : (delta > 0 ? C.success : C.danger);
+                        chips.push({ label: "pH prom.", prev: String(prevAvg), curr: String(currAvg), delta: `${delta >= 0 ? "+" : ""}${delta}`, icon, col });
+                      } else {
+                        chips.push({ label: "pH prom. (anterior)", prev: String(prevAvg), curr: null, col: C.textLight });
+                      }
+                    }
+                  }
+                  if (!chips.length) return null;
+                  return (
+                    <div style={{ background: "#f0f4ff", border: `1px solid ${C.primary}25`, borderRadius: 8, padding: "8px 12px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>vs {fmt(prevVisit.fecha)}</span>
+                      {chips.slice(0, 6).map((ch, i) => (
+                        <span key={i} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 10, background: ch.curr ? (ch.col + "15") : C.borderLight, color: ch.curr ? ch.col : C.textLight, fontWeight: ch.curr ? 600 : 400 }}>
+                          {ch.label}: {ch.prev}
+                          {ch.curr && <> → {ch.curr} <span style={{ fontWeight: 700 }}>{ch.icon}{ch.delta}</span></>}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {/* Custom components */}
                 {sec.customComponent === "ingredients" && (
                   <div>
@@ -3013,6 +3592,8 @@ const fetchVisits = async (clientId) => {
                       value={formData[`${sec.id}_ingredients`] || []}
                       onChange={val => handleFieldChange(`${sec.id}_ingredients`, val)}
                       readOnly={ro}
+                      extraData={formData[`${sec.id}_mix`] || {}}
+                      onExtraChange={ro ? null : val => handleFieldChange(`${sec.id}_mix`, val)}
                     />
                   </div>
                 )}
@@ -3029,6 +3610,13 @@ const fetchVisits = async (clientId) => {
                     onChange={val => handleFieldChange(`${sec.id}_cowscore`, val)}
                     readOnly={ro}
                     scoreType={sec.customComponent.replace("cowscore_", "")}
+                  />
+                )}
+                {sec.customComponent === "ph_scoring" && (
+                  <pHScoring
+                    value={formData[`${sec.id}_ph`] || { samples: [], obs: "" }}
+                    onChange={val => handleFieldChange(`${sec.id}_ph`, val)}
+                    readOnly={ro}
                   />
                 )}
                 {sec.customComponent === "ketosis" && (
@@ -3091,6 +3679,11 @@ const fetchVisits = async (clientId) => {
         </div>
       )}
 
+      {/* Score Global Preparto (solo en visitas de preparto) */}
+      {selCat?.id === "preparto" && (
+        <PrepartoScoreCard data={formData} />
+      )}
+
       {/* Botón flotante de guardado rápido */}
       {vw !== "viewVisit" && (
         <div style={{ position: "fixed", bottom: 28, right: 28, zIndex: 200 }}>
@@ -3124,7 +3717,7 @@ const fetchVisits = async (clientId) => {
     />
   );
 
-  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
+  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
 
 return (
   <div style={{ fontFamily: ff, minHeight: "100vh", background: C.bg, color: C.text }}>
