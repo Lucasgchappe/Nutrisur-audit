@@ -2166,6 +2166,10 @@ export default function DairyAuditApp() {
   const [searchQ, setSearchQ] = useState("");
   const [expandedSections, setExpandedSections] = useState({});
 
+  const toggleSection = (secId) => {
+    setExpandedSections(prev => ({ ...prev, [secId]: !prev[secId] }));
+  };
+
 useEffect(() => {
   let alive = true;
 
@@ -2177,13 +2181,9 @@ useEffect(() => {
     setUser(sessionUser);
     setLoading(false);
 
-    if (sessionUser) setVw("dashboard");   // <- esto quizá lo ajustamos
+    if (sessionUser) setVw("dashboard");
     else setVw("login");
   });
-
-    const toggleSection = (secId) => {
-    setExpandedSections(prev => ({ ...prev, [secId]: prev[secId] === false ? true : false }));
-  };
 
   const { data: { subscription } } =
     supabase.auth.onAuthStateChange((_event, session) => {
@@ -2454,7 +2454,7 @@ const Toast = msg && (
 
   // ── LAYOUT ──
   const Header = (<div style={{ background: C.primaryDark, color: "#fff", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}><style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap'); * { box-sizing: border-box; }`}</style><div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}><span style={{ fontSize: 26 }}>🐄</span><div><span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>NutriSur</span><span style={{ fontSize: 11, opacity: 0.7, marginLeft: 8, verticalAlign: "middle" }}>Auditoría Lechera</span></div></div><div style={{ display: "flex", alignItems: "center", gap: 16 }}><span style={{ fontSize: 13, opacity: 0.8 }}>👤 {user?.user_metadata?.nombre || user?.email || "Técnico"}</span><Btn variant="ghost" size="sm" icon="logout" onClick={handleLogout} style={{ color: "#fff", opacity: 0.8 }}>Salir</Btn></div></div>);
-  const Nav = (<div style={{ display: "flex", gap: 8, padding: "16px 24px", background: C.bg, borderBottom: `1px solid ${C.borderLight}` }}><Btn variant={vw === "dashboard" ? "primary" : "outline"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); }}>Inicio</Btn><Btn variant={["clients", "clientDetail"].includes(vw) ? "primary" : "outline"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn></div>);
+  const Nav = (<div style={{ display: "flex", gap: 8, padding: "12px 24px", background: C.bg, borderBottom: `1px solid ${C.borderLight}` }}><Btn variant={vw === "dashboard" ? "primary" : "outline"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); }}>Inicio</Btn><Btn variant={["clients", "clientDetail"].includes(vw) ? "primary" : "outline"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn><Btn variant={vw === "informes" ? "primary" : "outline"} size="sm" icon="chart" onClick={() => setVw("informes")}>Informes</Btn></div>);
 
   // ── DASHBOARD ──
   const Dashboard = (
@@ -2712,7 +2712,278 @@ const fetchVisits = async (clientId) => {
     </div>
   );
 
-  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, newVisit: VisitForm, viewVisit: VisitForm };
+  // ── INFORMES ──
+  // Reúne TODAS las visitas de TODOS los clientes para análisis
+  const allVisitsForInformes = useMemo(() => {
+    // visits solo tiene el cliente seleccionado — necesitamos todas
+    // Las cargamos acá desde el state global si están disponibles
+    return visits; // se expande abajo cuando se selecciona cliente
+  }, [visits]);
+
+  const [infoClient, setInfoClient] = useState("all");
+  const [infoCat, setInfoCat] = useState("all");
+  const [infoMetric, setInfoMetric] = useState("bcs");
+  const [allVisitsCache, setAllVisitsCache] = useState([]);
+
+  // Carga todas las visitas para informes
+  useEffect(() => {
+    if (vw !== "informes" || !user) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("visits").select("*")
+        .order("fecha", { ascending: true });
+      if (!error && data) {
+        setAllVisitsCache(data.map(v => ({
+          ...v, clientId: v.client_id, categoryId: v.category_id,
+        })));
+      }
+    })();
+  }, [vw, user]);
+
+  const METRICS = [
+    { id: "bcs", label: "BCS promedio", cat: "preparto", extract: (v) => { const cs = v.data?.pr_bcs_cowscore || v.data?.fr_bcs_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+    { id: "cetosis", label: "Cetosis prevalencia %", cat: "frescas", extract: (v) => { const kt = v.data?.fr_cetosis_ketosis; if (!kt?.cows?.length) return null; return round(kt.cows.filter(c=>c.positivo).length/kt.cows.length*100,1); } },
+    { id: "leche14", label: "Leche a 14 DIM (lt)", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_14dim) || null },
+    { id: "leche7", label: "Leche a 7 DIM (lt)", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_7dim) || null },
+    { id: "grasa", label: "% Grasa", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_grasa) || null },
+    { id: "proteina", label: "% Proteína", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_prod_prot) || null },
+    { id: "cms_oferta", label: "CMS oferta (kg MS)", cat: "frescas", extract: (v) => parseFloat(v.data?.fr_dmi_oferta) || null },
+    { id: "ith", label: "ITH (índice calórico)", cat: "estres_calorico", extract: (v) => parseFloat(v.data?.ec_ith) || null },
+    { id: "temp_cama_sup", label: "Temp. cama superficial (°C)", cat: "calidad_cama", extract: (v) => { const pts = v.data?.cama_medicion_bedding?.points; if (!pts?.length) return null; const t = pts.map(p=>parseFloat(p.temp_sup)).filter(v=>!isNaN(v)); return t.length ? round(t.reduce((a,b)=>a+b,0)/t.length,1) : null; } },
+    { id: "pennstate_sup", label: "Penn State bandeja sup (%)", cat: "frescas", extract: (v) => { const ps = v.data?.fr_pennstate_pennstate; return ps?.sup_avg ? parseFloat(ps.sup_avg) : null; } },
+    { id: "pennstate_fondo", label: "Penn State fondo (%)", cat: "frescas", extract: (v) => { const ps = v.data?.fr_pennstate_pennstate; return ps?.fondo_avg ? parseFloat(ps.fondo_avg) : null; } },
+    { id: "heces", label: "Score heces promedio", cat: "frescas", extract: (v) => { const cs = v.data?.fr_heces_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(v=>!isNaN(v)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+    { id: "rumen", label: "Llenado ruminal promedio", cat: "frescas", extract: (v) => { const cs = v.data?.fr_rumen_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(v=>!isNaN(v)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+  ];
+
+  const InformesView = (() => {
+    const metric = METRICS.find(m => m.id === infoMetric) || METRICS[0];
+
+    // Filtrar visitas
+    const filtVisits = allVisitsCache.filter(v => {
+      if (infoClient !== "all" && v.client_id !== infoClient) return false;
+      if (metric.cat && v.categoryId !== metric.cat) return false;
+      return true;
+    });
+
+    // Extraer puntos de datos
+    const dataPoints = filtVisits.map(v => {
+      const val = metric.extract(v);
+      const client = clients.find(c => c.id === v.client_id);
+      return val !== null ? { fecha: v.fecha, val, clientName: client?.nombre || "—", visitId: v.id } : null;
+    }).filter(Boolean).sort((a, b) => a.fecha?.localeCompare(b.fecha));
+
+    // Estadísticas
+    const vals = dataPoints.map(d => d.val);
+    const n = vals.length;
+    const avg = n > 0 ? round(vals.reduce((a,b)=>a+b,0)/n, 2) : null;
+    const minV = n > 0 ? Math.min(...vals) : null;
+    const maxV = n > 0 ? Math.max(...vals) : null;
+    const sd = n > 1 ? round(Math.sqrt(vals.reduce((s,v)=>s+(v-avg)**2,0)/(n-1)),2) : null;
+
+    // Agrupado por cliente para comparación
+    const byClient = {};
+    dataPoints.forEach(d => {
+      if (!byClient[d.clientName]) byClient[d.clientName] = [];
+      byClient[d.clientName].push(d);
+    });
+
+    const chartH = 180;
+    const chartW = "100%";
+    const pad = { t: 20, b: 40, l: 50, r: 20 };
+    const minY = minV !== null ? Math.floor(minV * 0.95) : 0;
+    const maxY = maxV !== null ? Math.ceil(maxV * 1.05) : 10;
+    const rangeY = maxY - minY || 1;
+
+    const clientColors = ["#1565C0","#E76F51","#2D9CDB","#27AE60","#9B51E0","#F2994A","#EB5757","#219653"];
+
+    const toY = (val) => chartH - pad.b - ((val - minY) / rangeY) * (chartH - pad.t - pad.b);
+
+    return (
+      <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+        <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, marginBottom: 4 }}>Informes y Análisis</h2>
+        <p style={{ color: C.textLight, marginBottom: 24, fontSize: 14 }}>Seguimiento de indicadores técnicos por visita, cliente y período</p>
+
+        {/* Controles */}
+        <Card style={{ marginBottom: 20, padding: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Indicador</label>
+              <select value={infoMetric} onChange={e => setInfoMetric(e.target.value)} style={{ ...inputStyle, fontSize: 13 }}>
+                {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Cliente</label>
+              <select value={infoClient} onChange={e => setInfoClient(e.target.value)} style={{ ...inputStyle, fontSize: 13 }}>
+                <option value="all">Todos los clientes</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+          </div>
+        </Card>
+
+        {/* KPIs */}
+        {n > 0 && (
+          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+            {[
+              { label: "Registros", val: n, color: C.primary },
+              { label: "Promedio", val: avg, color: C.primary },
+              { label: "Mínimo", val: minV, color: C.accent },
+              { label: "Máximo", val: maxV, color: C.success },
+              { label: "Desvío std.", val: sd, color: "#7C3AED" },
+            ].map((k, i) => (
+              <div key={i} style={{ padding: "12px 20px", background: C.card, borderRadius: 10, border: `1px solid ${C.borderLight}`, textAlign: "center", minWidth: 90 }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.val ?? "—"}</div>
+                <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {n === 0 ? (
+          <Card style={{ textAlign: "center", padding: 48 }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>📊</div>
+            <p style={{ color: C.textLight, fontSize: 15 }}>No hay datos para <b>{metric.label}</b> con los filtros seleccionados.</p>
+            <p style={{ color: C.textLight, fontSize: 13 }}>Cargá visitas con ese módulo para ver el análisis.</p>
+          </Card>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+            {/* Gráfico de evolución temporal */}
+            <Card style={{ gridColumn: infoClient !== "all" ? "1" : "1 / -1", padding: 20 }}>
+              <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>
+                Evolución temporal — {metric.label}
+              </h3>
+              <div style={{ overflowX: "auto" }}>
+                <svg width="100%" height={chartH} style={{ display: "block", minWidth: 320 }} viewBox={`0 0 600 ${chartH}`} preserveAspectRatio="xMidYMid meet">
+                  {/* Grid lines */}
+                  {[0, 0.25, 0.5, 0.75, 1].map(pct => {
+                    const y = pad.t + pct * (chartH - pad.t - pad.b);
+                    const val = round(maxY - pct * rangeY, 1);
+                    return (
+                      <g key={pct}>
+                        <line x1={pad.l} y1={y} x2={600 - pad.r} y2={y} stroke={C.borderLight} strokeWidth="1" />
+                        <text x={pad.l - 6} y={y + 4} fontSize="10" fill={C.textLight} textAnchor="end">{val}</text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Líneas por cliente */}
+                  {Object.entries(byClient).map(([clientName, pts], ci) => {
+                    const color = clientColors[ci % clientColors.length];
+                    const xStep = pts.length > 1 ? (600 - pad.l - pad.r) / (pts.length - 1) : 0;
+                    const points = pts.map((d, i) => {
+                      const x = pad.l + i * xStep;
+                      const y = toY(d.val);
+                      return `${x},${y}`;
+                    });
+                    return (
+                      <g key={clientName}>
+                        {pts.length > 1 && <polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />}
+                        {pts.map((d, i) => {
+                          const x = pad.l + i * xStep;
+                          const y = toY(d.val);
+                          return (
+                            <g key={i}>
+                              <circle cx={x} cy={y} r="5" fill={color} stroke="#fff" strokeWidth="2" />
+                              <text x={x} y={y - 10} fontSize="10" fill={color} textAnchor="middle" fontWeight="600">{d.val}</text>
+                            </g>
+                          );
+                        })}
+                        {/* Fechas eje X */}
+                        {pts.map((d, i) => {
+                          const x = pad.l + i * xStep;
+                          return <text key={i} x={x} y={chartH - 6} fontSize="9" fill={C.textLight} textAnchor="middle">{fmt(d.fecha)}</text>;
+                        })}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* Leyenda */}
+              {Object.keys(byClient).length > 1 && (
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                  {Object.keys(byClient).map((name, i) => (
+                    <div key={name} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                      <div style={{ width: 12, height: 3, borderRadius: 2, background: clientColors[i % clientColors.length] }} />
+                      <span style={{ color: C.textLight }}>{name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Tabla de valores */}
+            <Card style={{ padding: 20 }}>
+              <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>Detalle por visita</h3>
+              <div style={{ overflowY: "auto", maxHeight: 300 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: C.primary + "10" }}>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 600 }}>Cliente</th>
+                      <th style={{ padding: "6px 10px", textAlign: "center", fontWeight: 600 }}>Fecha</th>
+                      <th style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>Valor</th>
+                      <th style={{ padding: "6px 10px", textAlign: "center", fontWeight: 600 }}>vs Prom.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...dataPoints].reverse().map((d, i) => {
+                      const delta = avg !== null ? round(d.val - avg, 2) : null;
+                      return (
+                        <tr key={i} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+                          <td style={{ padding: "6px 10px", fontWeight: 500 }}>{d.clientName}</td>
+                          <td style={{ padding: "6px 10px", textAlign: "center", color: C.textLight }}>{fmt(d.fecha)}</td>
+                          <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: C.primary }}>{d.val}</td>
+                          <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                            {delta !== null && (
+                              <span style={{ fontSize: 12, fontWeight: 600, color: delta >= 0 ? C.success : C.accent }}>
+                                {delta > 0 ? "+" : ""}{delta}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Comparación entre clientes (barras) */}
+            {Object.keys(byClient).length > 1 && (
+              <Card style={{ gridColumn: "1 / -1", padding: 20 }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>Comparación entre clientes — último valor</h3>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+                  {Object.entries(byClient).map(([name, pts], i) => {
+                    const lastVal = pts[pts.length - 1]?.val;
+                    const barPct = maxV > 0 ? (lastVal / maxV) * 100 : 0;
+                    const color = clientColors[i % clientColors.length];
+                    return (
+                      <div key={name} style={{ flex: 1, minWidth: 80, textAlign: "center" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color, marginBottom: 4 }}>{lastVal}</div>
+                        <div style={{ height: 120, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                          <div style={{
+                            width: 40, height: `${barPct}%`, minHeight: 4,
+                            background: color, borderRadius: "4px 4px 0 0",
+                            transition: "height 0.4s",
+                          }} />
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textLight, marginTop: 4, wordBreak: "break-word" }}>{name}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  })();
+
+  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
 
 return (
   <div style={{ fontFamily: ff, minHeight: "100vh", background: C.bg, color: C.text }}>
