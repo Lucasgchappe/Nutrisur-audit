@@ -397,7 +397,7 @@ const ForageStockChart = ({ calcs, maxDias, semaforoColor }) => {
 // FORAGE STOCK PANEL — Inventario de Forrajes / Reservas
 // ═══════════════════════════════════════════════════
 const ForageStockPanel = ({ value = [], onChange, readOnly, dietItems = [] }) => {
-  const [globalVacas, setGlobalVacas] = React.useState("");
+  const [globalVacas, setGlobalVacas] = useState("");
 
   const calcLote = (lote) => {
     const vacas = parseFloat(lote.vacas) > 0 ? parseFloat(lote.vacas) : (parseFloat(globalVacas) || 1);
