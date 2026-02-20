@@ -107,6 +107,9 @@ const FEED_INGREDIENTS = [
 
 const FEED_CATEGORIES_ORDER = ["Forrajes", "Energéticos", "Proteicos", "Aditivos/Minerales"];
 
+// Sugerencias de nombres de forrajes para datalist del panel de inventario
+const FORAGE_SUGGESTIONS = FEED_INGREDIENTS.filter(i => i.category === "Forrajes").map(i => i.name);
+
 // ─── Icons ───
 const Icon = ({ name, size = 20, color = "currentColor" }) => {
   const icons = {
@@ -318,6 +321,305 @@ const ESTRES_CALORICO_SECTIONS = [
   ]},
 ];
 
+
+// ═══════════════════════════════════════════════════
+// FORAGE STOCK CHART — SVG de barras (sin hooks)
+// ═══════════════════════════════════════════════════
+const ForageStockChart = ({ calcs, maxDias, semaforoColor }) => {
+  const BAR_W = 38;
+  const BAR_GAP = 14;
+  const CHART_H = 110;
+  const LABEL_H = 44;
+  const PAD_L = 38;
+  const PAD_T = 12;
+  const n = calcs.length;
+  const svgW = PAD_L + n * (BAR_W + BAR_GAP) + 16;
+  const svgH = CHART_H + LABEL_H + PAD_T;
+  const effectiveMax = Math.max(maxDias, 1);
+
+  const yFor = (d) => PAD_T + CHART_H - Math.round((Math.min(d, effectiveMax) / effectiveMax) * CHART_H);
+  const y15 = effectiveMax >= 15 ? yFor(15) : null;
+  const y30 = effectiveMax >= 30 ? yFor(30) : null;
+
+  return (
+    <div style={{ overflowX: "auto", marginTop: 14 }}>
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} width={svgW} height={svgH}
+        style={{ display: "block", fontFamily: "'Inter', sans-serif" }}>
+        {/* Líneas de referencia */}
+        {y15 !== null && (
+          <g>
+            <line x1={PAD_L} y1={y15} x2={svgW - 6} y2={y15} stroke="#f59e0b" strokeWidth="1" strokeDasharray="4,3" />
+            <text x={PAD_L - 3} y={y15 + 4} fontSize="9" fill="#f59e0b" textAnchor="end">15d</text>
+          </g>
+        )}
+        {y30 !== null && (
+          <g>
+            <line x1={PAD_L} y1={y30} x2={svgW - 6} y2={y30} stroke="#22c55e" strokeWidth="1" strokeDasharray="4,3" />
+            <text x={PAD_L - 3} y={y30 + 4} fontSize="9" fill="#22c55e" textAnchor="end">30d</text>
+          </g>
+        )}
+        {/* Barras */}
+        {calcs.map((l, i) => {
+          const col = semaforoColor(l.dias);
+          const x = PAD_L + i * (BAR_W + BAR_GAP);
+          const barH = l.dias !== null ? Math.max(4, Math.round((Math.min(l.dias, effectiveMax) / effectiveMax) * CHART_H)) : 0;
+          const y = PAD_T + CHART_H - barH;
+          const rawLabel = `${l.name || "?"}${l.lot ? " " + l.lot : ""}`;
+          const label = rawLabel.length > 14 ? rawLabel.slice(0, 13) + "…" : rawLabel;
+          return (
+            <g key={l.id || i}>
+              <title>{`${rawLabel}: ${l.dias !== null ? l.dias + " días" : "sin datos"}`}</title>
+              {barH > 0 && (
+                <rect x={x} y={y} width={BAR_W} height={barH}
+                  fill={col} fillOpacity={0.82} rx={4} />
+              )}
+              {l.dias !== null && (
+                <text x={x + BAR_W / 2} y={y - 4} fontSize="10" fill={col}
+                  textAnchor="middle" fontWeight="700">{l.dias}d</text>
+              )}
+              <text x={x + BAR_W / 2} y={PAD_T + CHART_H + 13} fontSize="9"
+                fill="#888" textAnchor="end"
+                transform={`rotate(-42, ${x + BAR_W / 2}, ${PAD_T + CHART_H + 13})`}>
+                {label}
+              </text>
+            </g>
+          );
+        })}
+        {/* Ejes */}
+        <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + CHART_H} stroke="#e2e8f0" strokeWidth="1" />
+        <line x1={PAD_L} y1={PAD_T + CHART_H} x2={svgW - 6} y2={PAD_T + CHART_H} stroke="#e2e8f0" strokeWidth="1" />
+      </svg>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════
+// FORAGE STOCK PANEL — Inventario de Forrajes / Reservas
+// ═══════════════════════════════════════════════════
+const ForageStockPanel = ({ value = [], onChange, readOnly, dietItems = [] }) => {
+  const [globalVacas, setGlobalVacas] = React.useState("");
+
+  const calcLote = (lote) => {
+    const vacas = parseFloat(lote.vacas) > 0 ? parseFloat(lote.vacas) : (parseFloat(globalVacas) || 1);
+    const dietMatch = dietItems.find(d => d.name === lote.name);
+    const consumoKgVaca = parseFloat(lote.consumo_kg_tc) > 0
+      ? parseFloat(lote.consumo_kg_tc)
+      : (dietMatch ? parseFloat(dietMatch.kg_tal_cual) || 0 : 0);
+    const consumoTotal = consumoKgVaca * vacas;
+    const stockTC = parseFloat(lote.stock_kg_tc) || 0;
+    const dias = consumoTotal > 0 ? Math.floor(stockTC / consumoTotal) : null;
+    const msPct = parseFloat(lote.ms_pct) || 0;
+    const kgMS = msPct > 0 ? round(stockTC * msPct / 100, 0) : null;
+    return { dias, kgMS, consumoTotal, consumoKgVaca, vacas };
+  };
+
+  const semaforoColor = (dias) => {
+    if (dias === null || dias === undefined) return "#94a3b8";
+    if (dias > 30) return "#22c55e";
+    if (dias >= 15) return "#f59e0b";
+    return "#ef4444";
+  };
+
+  const addLote = () => {
+    const newLote = { id: uid(), name: "", lot: "", ms_pct: "", stock_kg_tc: "", vacas: "", consumo_kg_tc: "" };
+    onChange([...value, newLote]);
+  };
+
+  const updateLote = (id, field, val) => {
+    onChange(value.map(l => {
+      if (l.id !== id) return l;
+      const updated = { ...l, [field]: val };
+      // Auto-fill ms_pct al seleccionar nombre de lista
+      if (field === "name" && !l.ms_pct) {
+        const found = FEED_INGREDIENTS.find(f => f.name === val);
+        if (found) updated.ms_pct = String(found.ms_typical);
+      }
+      return updated;
+    }));
+  };
+
+  const removeLote = (id) => onChange(value.filter(l => l.id !== id));
+
+  const calcs = value.map(l => ({ ...l, ...calcLote(l) }));
+  const maxDias = Math.max(1, ...calcs.map(l => l.dias || 0));
+  const totalStockTon = round(value.reduce((s, l) => s + (parseFloat(l.stock_kg_tc) || 0), 0) / 1000, 1);
+  const minDias = calcs.reduce((min, l) => {
+    if (l.dias === null) return min;
+    return min === null ? l : (l.dias < min.dias ? l : min);
+  }, null);
+
+  // ── Modo lectura ────────────────────────────────
+  if (readOnly) {
+    if (!value.length) return null;
+    return (
+      <div style={{ marginTop: 20, padding: 16, background: "#f0f7ff", border: "1.5px solid #1565C020", borderRadius: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📦 Inventario de Forrajes / Reservas</div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#1565C010" }}>
+                {["Forraje", "Lote", "Stock kg TC", "kg MS", "Días restantes"].map(h => (
+                  <th key={h} style={{ padding: "6px 10px", textAlign: h === "Forraje" || h === "Lote" ? "left" : "right", fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {calcs.map(l => {
+                const col = semaforoColor(l.dias);
+                return (
+                  <tr key={l.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "6px 10px" }}>{l.name || "—"}</td>
+                    <td style={{ padding: "6px 10px", color: "#64748b" }}>{l.lot || "—"}</td>
+                    <td style={{ padding: "6px 10px", textAlign: "right" }}>{l.stock_kg_tc ? Number(l.stock_kg_tc).toLocaleString("es-UY") : "—"}</td>
+                    <td style={{ padding: "6px 10px", textAlign: "right" }}>{l.kgMS !== null ? l.kgMS.toLocaleString("es-UY") : "—"}</td>
+                    <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: col }}>
+                      {l.dias !== null ? `${l.dias} d` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {calcs.some(l => l.dias !== null) && (
+          <ForageStockChart calcs={calcs} maxDias={maxDias} semaforoColor={semaforoColor} />
+        )}
+        <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
+          {value.length} lote{value.length !== 1 ? "s" : ""} · Total stock: {totalStockTon} ton TC
+          {minDias && ` · Menor reserva: ${minDias.dias}d (${minDias.name}${minDias.lot ? " " + minDias.lot : ""})`}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Modo edición ────────────────────────────────
+  return (
+    <div style={{ marginTop: 20, padding: 16, background: "#f0f7ff", border: "1.5px solid #1565C025", borderRadius: 12 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontWeight: 700, fontSize: 14 }}>📦 Inventario de Forrajes / Reservas</span>
+        <Btn variant="outline" size="sm" icon="plus" onClick={addLote}>Agregar lote</Btn>
+      </div>
+
+      {/* Vacas global */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <label style={{ fontSize: 13, fontWeight: 600, color: "#64748b", whiteSpace: "nowrap" }}>Vacas del grupo:</label>
+        <input
+          type="number" min="1" step="1" value={globalVacas}
+          onChange={e => setGlobalVacas(e.target.value)}
+          placeholder="Ej: 120"
+          style={{ padding: "6px 10px", fontSize: 13, border: "1.5px solid #e2e8f0", borderRadius: 8, width: 110, fontFamily: "'Inter', sans-serif", outline: "none" }}
+        />
+        <span style={{ fontSize: 12, color: "#94a3b8" }}>aplica a lotes sin vacas propias</span>
+      </div>
+
+      {/* Datalist para autocompletar */}
+      <datalist id="forage-name-list">
+        {FORAGE_SUGGESTIONS.map(n => <option key={n} value={n} />)}
+      </datalist>
+
+      {/* Tabla de lotes */}
+      {value.length > 0 && (
+        <div style={{ overflowX: "auto", marginBottom: 14 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#1565C010" }}>
+                <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, minWidth: 140 }}>Forraje</th>
+                <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, minWidth: 70 }}>Lote / ID</th>
+                <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, minWidth: 95 }}>Stock (kg TC)</th>
+                <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, width: 62 }}>%MS</th>
+                <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, width: 78 }}>kg MS</th>
+                <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, width: 68 }}>Vacas</th>
+                <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, minWidth: 100 }}>kg/v/día</th>
+                <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 74 }}>Días</th>
+                <th style={{ width: 30 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {value.map(lote => {
+                const { dias, kgMS, consumoKgVaca } = calcLote(lote);
+                const col = semaforoColor(dias);
+                const dietMatch = dietItems.find(d => d.name === lote.name);
+                const inS = { padding: "4px 6px", fontSize: 12, border: "1.5px solid #e2e8f0", borderRadius: 6, fontFamily: "'Inter', sans-serif", outline: "none", width: "100%", background: "#fff", boxSizing: "border-box" };
+                return (
+                  <tr key={lote.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "3px 4px" }}>
+                      <input type="text" list="forage-name-list" value={lote.name}
+                        onChange={e => updateLote(lote.id, "name", e.target.value)}
+                        placeholder="Forraje..." style={inS} />
+                    </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      <input type="text" value={lote.lot}
+                        onChange={e => updateLote(lote.id, "lot", e.target.value)}
+                        placeholder="Lote 5" style={inS} />
+                    </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      <input type="number" min="0" step="100" value={lote.stock_kg_tc}
+                        onChange={e => updateLote(lote.id, "stock_kg_tc", e.target.value)}
+                        placeholder="10000" style={{ ...inS, textAlign: "right" }} />
+                    </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      <input type="number" min="0" max="100" step="1" value={lote.ms_pct}
+                        onChange={e => updateLote(lote.id, "ms_pct", e.target.value)}
+                        placeholder={dietMatch ? String(dietMatch.ms_pct || "33") : "33"}
+                        style={{ ...inS, textAlign: "right" }} />
+                    </td>
+                    {/* kg MS calculado */}
+                    <td style={{ padding: "3px 8px", textAlign: "right", fontSize: 12, color: "#64748b", background: "#f0fdf4", borderRadius: 4 }}>
+                      {kgMS !== null ? kgMS.toLocaleString("es-UY") : "—"}
+                    </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      <input type="number" min="1" step="1" value={lote.vacas}
+                        onChange={e => updateLote(lote.id, "vacas", e.target.value)}
+                        placeholder={globalVacas || "—"}
+                        style={{ ...inS, textAlign: "right" }} />
+                    </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      <input type="number" min="0" step="0.5" value={lote.consumo_kg_tc}
+                        onChange={e => updateLote(lote.id, "consumo_kg_tc", e.target.value)}
+                        placeholder={dietMatch ? String(parseFloat(dietMatch.kg_tal_cual) || "—") : "—"}
+                        style={{ ...inS, textAlign: "right" }} />
+                    </td>
+                    {/* Badge de días */}
+                    <td style={{ padding: "3px 6px", textAlign: "center" }}>
+                      {dias !== null ? (
+                        <span style={{ display: "inline-block", padding: "2px 9px", borderRadius: 10, background: col + "20", color: col, fontWeight: 700, fontSize: 12 }}>
+                          {dias}d
+                        </span>
+                      ) : <span style={{ color: "#94a3b8", fontSize: 12 }}>—</span>}
+                    </td>
+                    <td style={{ padding: "3px 4px" }}>
+                      <button onClick={() => removeLote(lote.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 3, display: "flex" }}>
+                        <Icon name="x" size={14} color="#ef4444" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Gráfico SVG */}
+      {calcs.length > 0 && calcs.some(l => l.dias !== null) && (
+        <ForageStockChart calcs={calcs} maxDias={maxDias} semaforoColor={semaforoColor} />
+      )}
+
+      {/* Resumen */}
+      {value.length > 0 ? (
+        <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>
+          {value.length} lote{value.length !== 1 ? "s" : ""} registrado{value.length !== 1 ? "s" : ""} · Total stock: {totalStockTon} ton TC
+          {minDias && ` · ⚠ Menor reserva: ${minDias.dias}d (${minDias.name}${minDias.lot ? " " + minDias.lot : ""})`}
+        </div>
+      ) : (
+        <div style={{ textAlign: "center", padding: "16px 0", color: "#94a3b8", fontSize: 13 }}>
+          Sin lotes cargados — presioná "+ Agregar lote" para comenzar
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════
 // INGREDIENT SELECTOR COMPONENT
@@ -2039,6 +2341,22 @@ const generateTextReport = (visit, client, category) => {
       if (mix?.mixTime) txt += `  Tiempo de mezclado: ${mix.mixTime} min\n`;
       if (mix?.bladesCond) txt += `  Estado de cuchillas: ${mix.bladesCond}\n`;
       if (mix?.loadOrder || mix?.mixTime || mix?.bladesCond) txt += "\n";
+      // Inventario de forrajes
+      const stock = visit.data?.[`${sec.id}_stock`];
+      if (stock?.length) {
+        txt += "  Inventario de Forrajes / Reservas:\n";
+        txt += "  Forraje                   Lote          Stock kg TC   kg MS   Días\n";
+        txt += "  ────────────────────────────────────────────────────────────────\n";
+        stock.forEach(l => {
+          const sTC = parseFloat(l.stock_kg_tc) || 0;
+          const kgMS = parseFloat(l.ms_pct) > 0 ? round(sTC * parseFloat(l.ms_pct) / 100, 0) : null;
+          const consumo = parseFloat(l.consumo_kg_tc) || 0;
+          const vacas = parseFloat(l.vacas) || 1;
+          const dias = consumo > 0 && vacas > 0 ? Math.floor(sTC / (consumo * vacas)) : null;
+          txt += `  ${(l.name || "").padEnd(26)} ${(l.lot || "").padEnd(13)} ${sTC > 0 ? sTC.toLocaleString("es-UY").padStart(10) : "         —"}   ${kgMS !== null ? String(kgMS.toLocaleString("es-UY")).padStart(6) : "     —"}  ${dias !== null ? dias + "d" : "—"}\n`;
+        });
+        txt += "\n";
+      }
     }
 
     // Penn State
@@ -2157,6 +2475,16 @@ const generateCSV = (visit, client, category) => {
       ings.forEach(i => {
         csv += `"${sec.title}","${i.name}","TC:${i.kg_tal_cual||0} MS%:${i.ms_pct||0} kgMS:${i.kg_ms||0}"\n`;
       });
+      // Inventario de forrajes / stock
+      const stock = visit.data?.[`${sec.id}_stock`] || [];
+      stock.forEach(l => {
+        const sTC = parseFloat(l.stock_kg_tc) || 0;
+        const kgMS = parseFloat(l.ms_pct) > 0 ? round(sTC * parseFloat(l.ms_pct) / 100, 0) : "";
+        const consumo = parseFloat(l.consumo_kg_tc) || 0;
+        const vacas = parseFloat(l.vacas) || 1;
+        const dias = consumo > 0 ? Math.floor(sTC / (consumo * vacas)) : "";
+        csv += `"${sec.title} - Stock","${l.name || ""}${l.lot ? " (" + l.lot + ")" : ""}","StockTC:${sTC} kgMS:${kgMS} Días:${dias}"\n`;
+      });
     }
     if (sec.customComponent?.startsWith("cowscore_")) {
       const data = visit.data?.[`${sec.id}_cowscore`];
@@ -2220,6 +2548,39 @@ const generateHTMLReport = (visit, client, category) => {
           <tbody>${rows}</tbody>
           <tfoot><tr style="background:${accentColor}10;font-weight:700"><td style="padding:6px 8px">TOTAL</td><td style="padding:6px 8px;text-align:right">${totalTC} kg</td><td></td><td style="padding:6px 8px;text-align:right">${totalMS} kg MS</td></tr></tfoot>
         </table>`;
+      }
+      // Inventario de forrajes
+      const stock = d[`${sec.id}_stock`] || [];
+      if (stock.length) {
+        const stockRows = stock.map(l => {
+          const sTC = parseFloat(l.stock_kg_tc) || 0;
+          const kgMS = parseFloat(l.ms_pct) > 0 ? round(sTC * parseFloat(l.ms_pct) / 100, 0) : null;
+          const consumo = parseFloat(l.consumo_kg_tc) || 0;
+          const vacas = parseFloat(l.vacas) || 1;
+          const dias = consumo > 0 ? Math.floor(sTC / (consumo * vacas)) : null;
+          const col = dias === null ? "#888" : dias > 30 ? "#22c55e" : dias >= 15 ? "#f59e0b" : "#ef4444";
+          const bg = dias === null ? "transparent" : dias > 30 ? "#f0fdf4" : dias >= 15 ? "#fffbeb" : "#fef2f2";
+          return `<tr style="background:${bg}">
+            <td style="padding:5px 8px">${l.name || "—"}</td>
+            <td style="padding:5px 8px;color:#888">${l.lot || "—"}</td>
+            <td style="padding:5px 8px;text-align:right">${sTC ? sTC.toLocaleString("es-UY") : "—"}</td>
+            <td style="padding:5px 8px;text-align:right">${kgMS !== null ? kgMS.toLocaleString("es-UY") : "—"}</td>
+            <td style="padding:5px 8px;text-align:center;font-weight:700;color:${col}">${dias !== null ? dias + " d" : "—"}</td>
+          </tr>`;
+        }).join("");
+        customContent += `<div style="margin-top:14px">
+          <div style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:6px">📦 Inventario de Forrajes / Reservas</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:${accentColor}10">
+              <th style="padding:5px 8px;text-align:left">Forraje</th>
+              <th style="padding:5px 8px;text-align:left">Lote</th>
+              <th style="padding:5px 8px;text-align:right">Stock kg TC</th>
+              <th style="padding:5px 8px;text-align:right">kg MS</th>
+              <th style="padding:5px 8px;text-align:center">Días restantes</th>
+            </tr></thead>
+            <tbody>${stockRows}</tbody>
+          </table>
+        </div>`;
       }
     }
 
@@ -3594,6 +3955,12 @@ const fetchVisits = async (clientId) => {
                       readOnly={ro}
                       extraData={formData[`${sec.id}_mix`] || {}}
                       onExtraChange={ro ? null : val => handleFieldChange(`${sec.id}_mix`, val)}
+                    />
+                    <ForageStockPanel
+                      value={formData[`${sec.id}_stock`] || []}
+                      onChange={val => handleFieldChange(`${sec.id}_stock`, val)}
+                      readOnly={ro}
+                      dietItems={formData[`${sec.id}_ingredients`] || []}
                     />
                   </div>
                 )}
