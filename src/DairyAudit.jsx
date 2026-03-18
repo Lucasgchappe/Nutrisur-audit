@@ -1156,7 +1156,7 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
 // pH SCORING COMPONENT — medición por vaca con semáforo
 // ═══════════════════════════════════════════════════
 const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => {
-  const TARGET = [6.0, 6.5]; // rumen pH ideal preparto
+  const TARGET = [6.0, 6.8]; // pH de orina objetivo dieta aniónica
   const samples = value.samples || [];
 
   const addSample = () => {
@@ -1176,27 +1176,28 @@ const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
   const minPH = n > 0 ? Math.min(...phVals) : null;
   const maxPH = n > 0 ? Math.max(...phVals) : null;
   const sd = n > 1 ? round(Math.sqrt(phVals.reduce((s, v) => s + (v - avg) ** 2, 0) / (n - 1)), 2) : null;
-  const pctBajo60 = n > 0 ? round(phVals.filter(v => v < 6.0).length / n * 100, 1) : null;
-  const pctBajo58 = n > 0 ? round(phVals.filter(v => v < 5.8).length / n * 100, 1) : null;
+  const pctEnObjetivo = n > 0 ? round(phVals.filter(v => v >= 6.0 && v <= 6.8).length / n * 100, 1) : null;
+  const pctSobreAcid = n > 0 ? round(phVals.filter(v => v < 5.5).length / n * 100, 1) : null;
   const pctOk = n > 0 ? round(phVals.filter(v => v >= TARGET[0] && v <= TARGET[1]).length / n * 100, 1) : null;
 
+  // pH de orina: 6.0–6.8 ideal, 5.5–5.99 o 6.8–7.5 borderline, <5.5 o >7.5 problema
   const phColor = (ph) => {
     const v = parseFloat(ph);
     if (isNaN(v)) return C.textLight;
-    if (v >= 6.0) return C.success;
-    if (v >= 5.8) return C.warning;
+    if (v >= 6.0 && v <= 6.8) return C.success;
+    if ((v >= 5.5 && v < 6.0) || (v > 6.8 && v <= 7.5)) return C.warning;
     return C.danger;
   };
   const phEmoji = (ph) => {
     const v = parseFloat(ph);
     if (isNaN(v)) return "";
-    if (v >= 6.0) return "🟢";
-    if (v >= 5.8) return "🟡";
+    if (v >= 6.0 && v <= 6.8) return "🟢";
+    if ((v >= 5.5 && v < 6.0) || (v > 6.8 && v <= 7.5)) return "🟡";
     return "🔴";
   };
 
-  const globalSemaforo = avg === null ? null : avg >= 6.0 ? "🟢" : avg >= 5.8 ? "🟡" : "🔴";
-  const globalColor = avg === null ? C.textLight : avg >= 6.0 ? C.success : avg >= 5.8 ? C.warning : C.danger;
+  const globalSemaforo = avg === null ? null : (avg >= 6.0 && avg <= 6.8) ? "🟢" : ((avg >= 5.5 && avg < 6.0) || (avg > 6.8 && avg <= 7.5)) ? "🟡" : "🔴";
+  const globalColor = avg === null ? C.textLight : (avg >= 6.0 && avg <= 6.8) ? C.success : ((avg >= 5.5 && avg < 6.0) || (avg > 6.8 && avg <= 7.5)) ? C.warning : C.danger;
 
   const StatBox = ({ label, val, color, unit = "" }) => (
     <div style={{ textAlign: "center", padding: "8px 12px", background: (color || C.primary) + "10", borderRadius: 8, minWidth: 70 }}>
@@ -1207,7 +1208,7 @@ const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
 
   return (
     <div>
-      <p style={{ fontSize: 12, color: C.textLight, margin: "0 0 10px", fontStyle: "italic" }}>pH ruminal por vaca. Objetivo: 6.0–6.5. 🟢 ≥6.0 | 🟡 5.8–5.99 | 🔴 &lt;5.8 (riesgo SARA)</p>
+      <p style={{ fontSize: 12, color: C.textLight, margin: "0 0 10px", fontStyle: "italic" }}>pH de orina por vaca — evalúa efectividad de la dieta aniónica. 🟢 6.0–6.8 (ideal) | 🟡 5.5–5.99 (sobre-acidificación) o 6.8–7.5 (dieta insuficiente) | 🔴 &lt;5.5 o &gt;7.5 (problema)</p>
 
       {n > 0 && (
         <>
@@ -1215,7 +1216,7 @@ const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, padding: "10px 16px", background: globalColor + "12", borderRadius: 10, border: `1.5px solid ${globalColor}40` }}>
             <span style={{ fontSize: 28 }}>{globalSemaforo}</span>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: globalColor }}>pH promedio: {avg}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: globalColor }}>pH orina promedio: {avg}</div>
               <div style={{ fontSize: 12, color: C.textLight }}>Objetivo: {TARGET[0]}–{TARGET[1]} | {n} vacas evaluadas</div>
             </div>
           </div>
@@ -1225,20 +1226,19 @@ const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
             <StatBox label="Mínimo" val={minPH} color={phColor(minPH)} />
             <StatBox label="Máximo" val={maxPH} color={phColor(maxPH)} />
             <StatBox label="Desvío" val={sd} color="#7C3AED" />
-            <StatBox label="🔴 <5.8" val={pctBajo58} color={pctBajo58 > 20 ? C.danger : C.success} unit="%" />
-            <StatBox label="🟡 <6.0" val={pctBajo60} color={pctBajo60 > 30 ? C.warning : C.success} unit="%" />
-            <StatBox label="🟢 En rango" val={pctOk} color={pctOk >= 70 ? C.success : C.warning} unit="%" />
+            <StatBox label="🔴 Sobre-acid (<5.5 o >7.5)" val={pctSobreAcid} color={pctSobreAcid > 10 ? C.danger : C.success} unit="%" />
+            <StatBox label="🟢 En objetivo" val={pctEnObjetivo} color={pctEnObjetivo >= 70 ? C.success : pctEnObjetivo >= 50 ? C.warning : C.danger} unit="%" />
           </div>
 
           {/* Distribución visual */}
           {n >= 3 && (() => {
             const buckets = [
-              { label: "<5.6", min: 0, max: 5.6, color: C.danger },
-              { label: "5.6-5.8", min: 5.6, max: 5.8, color: "#E53E3E" },
-              { label: "5.8-6.0", min: 5.8, max: 6.0, color: C.warning },
-              { label: "6.0-6.3", min: 6.0, max: 6.3, color: C.success },
-              { label: "6.3-6.5", min: 6.3, max: 6.5, color: "#22C55E" },
-              { label: ">6.5", min: 6.5, max: 99, color: C.primary },
+              { label: "<5.5", min: 0, max: 5.5, color: C.danger },
+              { label: "5.5–6.0", min: 5.5, max: 6.0, color: C.warning },
+              { label: "6.0–6.4", min: 6.0, max: 6.4, color: C.success },
+              { label: "6.4–6.8", min: 6.4, max: 6.8, color: "#22C55E" },
+              { label: "6.8–7.5", min: 6.8, max: 7.5, color: C.warning },
+              { label: ">7.5", min: 7.5, max: 99, color: C.danger },
             ];
             const counts = buckets.map(b => ({ ...b, count: phVals.filter(v => v >= b.min && v < b.max).length }));
             const maxCount = Math.max(...counts.map(b => b.count), 1);
@@ -1286,7 +1286,7 @@ const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
                     </td>
                     <td style={{ padding: "4px 4px", textAlign: "center" }}>
                       {readOnly ? <span style={{ fontWeight: 700, color: phColor(s.ph) }}>{s.ph || "—"}</span>
-                        : <input type="number" min="5.0" max="7.5" step="0.1" value={s.ph} onChange={e => updateSample(s.id, "ph", e.target.value)} placeholder="pH" style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, textAlign: "center", width: 80, fontWeight: 700, color: phColor(s.ph) }} />}
+                        : <input type="number" min="5.0" max="8.5" step="0.1" value={s.ph} onChange={e => updateSample(s.id, "ph", e.target.value)} placeholder="pH" style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, textAlign: "center", width: 80, fontWeight: 700, color: phColor(s.ph) }} />}
                     </td>
                     <td style={{ padding: "4px 4px", textAlign: "center", fontSize: 16 }}>{phEmoji(s.ph)}</td>
                     <td style={{ padding: "4px 4px" }}>
@@ -1704,7 +1704,7 @@ const PREPARTO_SECTIONS = [
     ],
   },
   {
-    id: "ph", title: "c) Evaluación de pH ruminal", subtitle: "Medición vaca por vaca con semáforo automático (target: 6.0–6.5)",
+    id: "ph", title: "c) pH de orina — evaluación de dieta aniónica", subtitle: "Medición vaca por vaca con semáforo automático (objetivo: 6.0–6.8)",
     customComponent: "ph_scoring",
     fields: [],
   },
@@ -1838,6 +1838,13 @@ const FRESCAS_SECTIONS = [
     { id: "fr_ps_tmr_vs_ref", label: "Comparación TMR ofrecido vs refusas", type: "textarea", placeholder: "Diferencias de Penn State entre TMR fresco y rechazado..." },
     { id: "fr_ps_variab", label: "Variabilidad dentro del lote", type: "textarea", placeholder: "¿El promedio esconde problemas? Diferencias entre animales..." },
   ]},
+  { id: "fr_locomocion", title: "7e. Puntuación de Locomoción", subtitle: "Observación del lote en movimiento — escala 1 (normal) a 5 (cojera severa)", fields: [
+    { id: "fr_loc_n_obs", label: "N° de vacas observadas", type: "number", placeholder: "Ej: 50" },
+    { id: "fr_loc_pct_3mas", label: "% vacas con score 3 o más (cojera leve-severa)", type: "number", placeholder: "Ej: 12", unit: "%", note: "Objetivo: <10%. Score 3: carga irregular. Score 4-5: cojera evidente." },
+    { id: "fr_loc_pct_4mas", label: "% vacas con score 4-5 (cojera severa)", type: "number", placeholder: "Ej: 2", unit: "%" },
+    { id: "fr_loc_podologia", label: "¿Hay plan de podología activo?", type: "select", options: ["Sí, programa regular", "Sí, solo urgencias", "No"] },
+    { id: "fr_loc_obs", label: "Causas probables / observaciones", type: "textarea", placeholder: "Tipo de piso, estado de camas, lesiones frecuentes, tiempo en barro..." },
+  ]},
   { id: "fr_plan", title: "8. Observaciones y Plan de Acción", subtitle: "Hallazgos, prioridades, responsables", fields: [
     { id: "fr_hallazgos", label: "Principales hallazgos", type: "textarea", placeholder: "Resumen de puntos críticos...", rows: 4 },
     { id: "fr_acciones", label: "Acciones priorizadas", type: "textarea", placeholder: "1. ...\n2. ...\n3. ...", rows: 4 },
@@ -1847,9 +1854,43 @@ const FRESCAS_SECTIONS = [
   ]},
 ];
 
+// ═══════════════════════════════════════════════════
+// VACAS EN PRODUCCIÓN — MÓDULO LIVIANO
+// BCS, heces, rumiación, producción general
+// ═══════════════════════════════════════════════════
+const PRODUCCION_SECTIONS = [
+  {
+    id: "vp_bcs", title: "1. Condición Corporal (BCS)", subtitle: "Evaluación vaca por vaca — objetivo según etapa de lactancia",
+    customComponent: "cowscore_bcs", fields: [],
+  },
+  {
+    id: "vp_heces", title: "2. Score de Heces", subtitle: "Indicador clave de digestión y SARA subclínica — evaluar variabilidad, no solo promedio",
+    customComponent: "cowscore_heces", fields: [],
+  },
+  {
+    id: "vp_general", title: "3. Indicadores del lote", subtitle: "Rumiación, producción y observación de comedero",
+    fields: [
+      { id: "vp_n_animales", label: "N° de animales evaluados", type: "number", placeholder: "Ej: 80" },
+      { id: "vp_dim_promedio", label: "DIM promedio del lote", type: "number", placeholder: "Ej: 120", unit: "días" },
+      { id: "vp_pct_rumiando", label: "% vacas rumiando (observación visual en reposo)", type: "number", placeholder: "Ej: 55", unit: "%", note: "Objetivo: ≥50% del lote rumiando cuando están en reposo" },
+      { id: "vp_leche_prom", label: "Producción promedio del lote (lt/vaca/día)", type: "number", placeholder: "Ej: 28", unit: "lt" },
+      { id: "vp_obs_comedero", label: "Observación de comedero", type: "textarea", placeholder: "Limpieza, acceso, horas sin alimento, sorting evidente..." },
+    ],
+  },
+  {
+    id: "vp_plan", title: "4. Observaciones y Plan de Acción", subtitle: "Hallazgos principales y acciones priorizadas",
+    fields: [
+      { id: "vp_hallazgos", label: "Principales hallazgos", type: "textarea", placeholder: "Resumen de puntos críticos observados...", rows: 4 },
+      { id: "vp_acciones", label: "Acciones priorizadas", type: "textarea", placeholder: "1. ...\n2. ...\n3. ...", rows: 4 },
+      { id: "vp_proxima", label: "Próxima visita", type: "date" },
+    ],
+  },
+];
+
 const CATEGORIES = [
   { id: "preparto", name: "Preparto", icon: "cow", color: "#2D6A4F", sections: PREPARTO_SECTIONS },
   { id: "frescas", name: "Frescas (0-60 DIM)", icon: "chart", color: "#E76F51", sections: FRESCAS_SECTIONS },
+  { id: "produccion", name: "Vacas en Producción", icon: "layers", color: "#0077B6", sections: PRODUCCION_SECTIONS },
   { id: "calidad_cama", name: "Calidad de Cama", icon: "thermo", color: "#7C3AED", sections: CALIDAD_CAMA_SECTIONS },
   { id: "calidad_alimento", name: "Calidad Alimento / Grano", icon: "layers", color: "#0891B2", sections: CALIDAD_ALIMENTO_SECTIONS },
   { id: "estres_calorico", name: "Verano / Estrés Calórico", icon: "sun", color: "#DC2626", sections: ESTRES_CALORICO_SECTIONS },
@@ -2899,7 +2940,7 @@ const calcPrepartoScore = (data) => {
     const phVals = phSamples.map(s => parseFloat(s.ph)).filter(v => !isNaN(v));
     const phAvg = phVals.reduce((a, b) => a + b, 0) / phVals.length;
     const phPts = phAvg >= 6.0 ? 10 : phAvg >= 5.8 ? 6 : 2;
-    p4.push({ label: "pH ruminal", pts: phPts, max: 10, val: round(phAvg, 2) });
+    p4.push({ label: "pH de orina", pts: phPts, max: 10, val: round(phAvg, 2) });
   }
   const psData = data.penn_state_pennstate;
   if (psData?.sup_avg) {
@@ -3018,6 +3059,9 @@ const METRICS = [
   { id: "pennstate_fondo",label: "Penn State fondo (%)",      unit: "%",   ref: [8, 20],      cat: "frescas",         extract: (v) => { const ps = v.data?.fr_pennstate_pennstate; return ps?.fondo_avg ? parseFloat(ps.fondo_avg) : null; } },
   { id: "heces",          label: "Score heces",               unit: "",    ref: [2, 3],       cat: "frescas",         extract: (v) => { const cs = v.data?.fr_heces_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
   { id: "rumen",          label: "Llenado ruminal",           unit: "",    ref: [3, 5],       cat: "frescas",         extract: (v) => { const cs = v.data?.fr_rumen_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+  { id: "locomocion",     label: "Cojera % (score ≥3)",       unit: "%",   ref: [0, 10],      cat: "frescas",         extract: (v) => parseFloat(v.data?.fr_locomocion_fr_loc_pct_3mas) || null },
+  { id: "rumiacion",      label: "Rumiando % (producción)",   unit: "%",   ref: [50, 70],     cat: "produccion",      extract: (v) => parseFloat(v.data?.vp_general_vp_pct_rumiando) || null },
+  { id: "bcs_prod",       label: "BCS prod. promedio",        unit: "",    ref: [2.75, 3.5],  cat: "produccion",      extract: (v) => { const cs = v.data?.vp_bcs_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
 ];
 
 const CLIENT_COLORS = ["#1565C0","#E76F51","#2D9CDB","#27AE60","#9B51E0","#F2994A","#EB5757","#0F766E"];
@@ -3367,7 +3411,7 @@ export default function DairyAuditApp() {
   const [selVisit, setSelVisit] = useState(null);
   const [visits, setVisits] = useState([]);
   const [formData, setFormData] = useState({});
-  const [clientForm, setClientForm] = useState({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" });
+  const [clientForm, setClientForm] = useState({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "", sistema_productivo: "" });
   const [loginForm, setLoginForm] = useState({ username: "", password: "", nombre: "" });
   const [msg, setMsg] = useState(null);
   const [searchQ, setSearchQ] = useState("");
@@ -3631,7 +3675,7 @@ const handlePortalLogout = () => {
     });
 
     flash("Cliente guardado");
-    setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" });
+    setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "", sistema_productivo: "" });
     setVw("clients");
   } catch (e) {
     console.error(e);
@@ -4012,7 +4056,7 @@ const Toast = msg && (
       {/* Acciones rápidas */}
       <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>Acciones rápidas</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14, marginBottom: 36 }}>
-        <Card onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}
+        <Card onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "", sistema_productivo: "" }); setVw("newClient"); }}
           style={{ border: `1.5px solid ${C.primary}20` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <div style={{ width: 50, height: 50, borderRadius: 12, background: `linear-gradient(135deg, ${C.primary}18, ${C.primaryLight}15)`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.primary}20` }}>
@@ -4089,7 +4133,7 @@ const Toast = msg && (
           <h2 style={{ fontFamily: ffSerif, fontSize: 26, margin: "0 0 4px", color: C.text, fontWeight: 700 }}>Clientes</h2>
           <p style={{ margin: 0, fontSize: 14, color: C.textLight }}>{clients.length} establecimiento{clients.length !== 1 ? "s" : ""} registrado{clients.length !== 1 ? "s" : ""}</p>
         </div>
-        <Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>
+        <Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "", sistema_productivo: "" }); setVw("newClient"); }}>
           Nuevo Cliente
         </Btn>
       </div>
@@ -4108,7 +4152,7 @@ const Toast = msg && (
             <div style={{ fontSize: 52, marginBottom: 12 }}>🐄</div>
             <div style={{ fontWeight: 700, fontSize: 16, color: C.text, marginBottom: 6 }}>No hay clientes todavía</div>
             <p style={{ color: C.textLight, margin: "0 0 20px" }}>Agregá tu primer establecimiento para comenzar</p>
-            <Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>
+            <Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "", sistema_productivo: "" }); setVw("newClient"); }}>
               Nuevo Cliente
             </Btn>
           </Card>
@@ -4168,6 +4212,17 @@ const Toast = msg && (
               <input type="text" placeholder={ph} value={clientForm[key] || ""} onChange={e => setClientForm({ ...clientForm, [key]: e.target.value })} style={inputStyle} />
             </div>
           ))}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Sistema productivo</label>
+            <select value={clientForm.sistema_productivo || ""} onChange={e => setClientForm({ ...clientForm, sistema_productivo: e.target.value })} style={inputStyle}>
+              <option value="">— Seleccionar —</option>
+              <option value="Pastoril">Pastoril (base pradera / pastoreo)</option>
+              <option value="Pastoril + suplementación">Pastoril + suplementación (mixto)</option>
+              <option value="Confinamiento / TMR">Confinamiento / TMR</option>
+              <option value="Otro">Otro</option>
+            </select>
+            <p style={{ fontSize: 12, color: C.textLight, margin: "4px 0 0" }}>Permite contextualizar los parámetros evaluados en cada visita.</p>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.borderLight}` }}>
           <Btn icon="save" onClick={saveClient}>Guardar cliente</Btn>
@@ -4217,7 +4272,12 @@ const fetchVisits = async (clientId) => {
       <Btn variant="ghost" icon="back" size="sm" onClick={() => { setVw("clients"); setSelClient(null); }} style={{ marginBottom: 16 }}>Volver</Btn>
       <Card style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-          <div><h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, margin: 0 }}>{selClient.nombre}</h2><p style={{ color: C.textLight, marginTop: 4, marginBottom: 0 }}>{selClient.establecimiento} {selClient.localidad ? `• ${selClient.localidad}` : ""}</p>{selClient.contacto && <p style={{ fontSize: 13, color: C.textLight, margin: "4px 0 0" }}>📞 {selClient.contacto}</p>}</div>
+          <div>
+            <h2 style={{ fontFamily: ffSerif, fontSize: 24, margin: 0 }}>{selClient.nombre}</h2>
+            <p style={{ color: C.textLight, marginTop: 4, marginBottom: 0 }}>{selClient.establecimiento}{selClient.localidad ? ` • ${selClient.localidad}` : ""}{selClient.provincia ? `, ${selClient.provincia}` : ""}</p>
+            {selClient.sistema_productivo && <p style={{ fontSize: 13, color: C.primary, margin: "4px 0 0", fontWeight: 600 }}>🌾 {selClient.sistema_productivo}</p>}
+            {selClient.contacto && <p style={{ fontSize: 13, color: C.textLight, margin: "4px 0 0" }}>📞 {selClient.contacto}</p>}
+          </div>
           <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" icon="edit" size="sm" onClick={() => { setClientForm(selClient); setVw("newClient"); }}>Editar</Btn><Btn variant="danger" icon="trash" size="sm" onClick={() => deleteClient(selClient)}>Eliminar</Btn></div>
         </div>
       </Card>
@@ -4259,6 +4319,60 @@ const fetchVisits = async (clientId) => {
           </div>
         </div>
       </Card>
+
+      {/* ── Progresión reciente ── */}
+      {visits.length >= 2 && (() => {
+        // Últimas 3 visitas ordenadas por fecha desc
+        const recent = [...visits].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "")).slice(0, 3);
+        // Métricas a mostrar (las más útiles)
+        const keyMetrics = METRICS.filter(m => ["bcs", "cetosis", "heces", "locomocion", "bcs_prod"].includes(m.id));
+        return (
+          <Card style={{ marginBottom: 24, padding: "18px 22px" }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 14 }}>📈 Progresión reciente</div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "6px 10px 6px 0", color: C.textLight, fontWeight: 600, borderBottom: `1px solid ${C.borderLight}`, whiteSpace: "nowrap" }}>Visita</th>
+                    <th style={{ textAlign: "left", padding: "6px 10px 6px 0", color: C.textLight, fontWeight: 600, borderBottom: `1px solid ${C.borderLight}` }}>Módulo</th>
+                    {keyMetrics.map(m => (
+                      <th key={m.id} style={{ textAlign: "center", padding: "6px 8px", color: C.textLight, fontWeight: 600, borderBottom: `1px solid ${C.borderLight}`, whiteSpace: "nowrap" }}>{m.label}{m.unit ? ` (${m.unit})` : ""}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((v, vi) => {
+                    const cat = CATEGORIES.find(c => c.id === (v.categoryId || v.category_id));
+                    const prevV = recent[vi + 1];
+                    return (
+                      <tr key={v.id} style={{ background: vi === 0 ? `${C.primary}06` : "transparent" }}>
+                        <td style={{ padding: "8px 10px 8px 0", fontWeight: vi === 0 ? 700 : 400, color: vi === 0 ? C.primary : C.text, whiteSpace: "nowrap" }}>{v.fecha || "—"}</td>
+                        <td style={{ padding: "8px 10px 8px 0", color: cat?.color || C.textLight, fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" }}>{cat?.name || "—"}</td>
+                        {keyMetrics.map(m => {
+                          const val = m.extract(v);
+                          const prevVal = prevV ? m.extract(prevV) : null;
+                          const inRef = val !== null && m.ref ? (val >= m.ref[0] && val <= m.ref[1]) : null;
+                          const color = inRef === true ? C.success : inRef === false ? C.danger : C.textLight;
+                          const arrow = (val !== null && prevVal !== null) ? (val > prevVal ? " ↑" : val < prevVal ? " ↓" : " →") : "";
+                          const arrowColor = arrow === " ↑" ? C.success : arrow === " ↓" ? C.danger : C.textLight;
+                          return (
+                            <td key={m.id} style={{ textAlign: "center", padding: "8px", fontWeight: val !== null ? 700 : 400 }}>
+                              {val !== null ? (
+                                <span style={{ color }}>{val}<span style={{ color: arrowColor, fontWeight: 800, fontSize: 11 }}>{arrow}</span></span>
+                              ) : <span style={{ color: C.borderLight }}>—</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p style={{ fontSize: 11, color: C.textLight, margin: "10px 0 0", fontStyle: "italic" }}>↑ mejora · ↓ baja · valores en verde dentro del rango objetivo · Para análisis completo ver Informes.</p>
+          </Card>
+        );
+      })()}
 
       <h3 style={{ margin: "0 0 12px", fontSize: 18 }}>Nueva visita</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 32 }}>
