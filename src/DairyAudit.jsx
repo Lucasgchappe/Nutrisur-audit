@@ -141,39 +141,88 @@ const Icon = ({ name, size = 20, color = "currentColor" }) => {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{icons[name]}</svg>);
 };
 
-// ─── Styles ───
+// ─── Styles ─── Nutrisur UY Brand: Azul profesional + Blanco
 const C = {
-  bg: "#F1F5F9", card: "#FFFFFF", primary: "#1565C0", primaryLight: "#1E88E5", primaryDark: "#0D47A1",
-  accent: "#E76F51", accentLight: "#F4A261", text: "#0F1D2E", textLight: "#64748B",
-  border: "#CBD5E1", borderLight: "#E2EAF2", success: "#15803D", warning: "#D97706",
-  danger: "#B91C1C", inputBg: "#F8FAFC",
+  bg: "#F0F5FB",
+  card: "#FFFFFF",
+  primary: "#1A4FBA",
+  primaryLight: "#2D6FE0",
+  primaryDark: "#0E2E72",
+  accent: "#00A9E0",
+  accentLight: "#5BC8F0",
+  text: "#0D1F38",
+  textLight: "#5B6D8A",
+  border: "#C5D5E8",
+  borderLight: "#DCE8F5",
+  success: "#0D7D47",
+  warning: "#CC8A00",
+  danger: "#C42B2B",
+  inputBg: "#F5F9FF",
 };
-const ff = "'Inter', system-ui, -apple-system, sans-serif";
-const ffSerif = "'Playfair Display', Georgia, serif";
+const ff = "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif";
+const ffSerif = "'Lora', Georgia, serif";
 
 // ─── Base Components ───
 const Btn = ({ children, onClick, variant = "primary", size = "md", icon, disabled, style: sx, ...r }) => {
   const vars = {
-    primary: { bg: C.primary, c: "#fff", h: C.primaryLight },
-    accent: { bg: C.accent, c: "#fff", h: "#d45a3e" },
-    outline: { bg: "transparent", c: C.primary, h: C.borderLight, bd: `1.5px solid ${C.primary}` },
-    ghost: { bg: "transparent", c: C.textLight, h: C.borderLight },
-    danger: { bg: C.danger, c: "#fff", h: "#c94a35" },
-    success: { bg: C.success, c: "#fff", h: "#3a7d5c" },
+    primary: { bg: C.primary, c: "#fff", h: C.primaryLight, sh: `0 2px 10px rgba(26,79,186,0.28)` },
+    accent: { bg: C.accent, c: "#fff", h: "#0090C5", sh: `0 2px 10px rgba(0,169,224,0.3)` },
+    outline: { bg: "transparent", c: C.primary, h: C.bg, bd: `1.5px solid ${C.primary}`, sh: "none" },
+    ghost: { bg: "transparent", c: C.textLight, h: C.bg, sh: "none" },
+    danger: { bg: C.danger, c: "#fff", h: "#a82020", sh: `0 2px 8px rgba(196,43,43,0.25)` },
+    success: { bg: C.success, c: "#fff", h: "#0a6438", sh: `0 2px 8px rgba(13,125,71,0.25)` },
   };
-  const v = vars[variant]; const sizes = { sm: { px: 10, py: 5, fs: 13 }, md: { px: 16, py: 8, fs: 14 }, lg: { px: 24, py: 12, fs: 16 } };
-  const s = sizes[size]; const [hov, setHov] = useState(false);
-  return (<button onClick={onClick} disabled={disabled} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: `${s.py}px ${s.px}px`, fontSize: s.fs, fontWeight: 600, fontFamily: ff, background: hov && !disabled ? v.h : v.bg, color: v.c, border: v.bd || "none", borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, transition: "all 0.2s", whiteSpace: "nowrap", ...sx }} {...r}>{icon && <Icon name={icon} size={s.fs + 2} />}{children}</button>);
+  const v = vars[variant];
+  const sizes = { sm: { px: 12, py: 6, fs: 13 }, md: { px: 18, py: 9, fs: 14 }, lg: { px: 26, py: 13, fs: 15 } };
+  const s = sizes[size];
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 7,
+        padding: `${s.py}px ${s.px}px`, fontSize: s.fs, fontWeight: 600,
+        fontFamily: ff, letterSpacing: "0.01em",
+        background: hov && !disabled ? v.h : v.bg,
+        color: v.c, border: v.bd || "none",
+        borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        boxShadow: hov && !disabled ? v.sh : "none",
+        transform: hov && !disabled ? "translateY(-1px)" : "none",
+        transition: "all 0.18s ease", whiteSpace: "nowrap", ...sx
+      }} {...r}>
+      {icon && <Icon name={icon} size={s.fs + 2} />}
+      {children}
+    </button>
+  );
 };
 
 const Card = ({ children, style: sx, onClick }) => {
   const [hov, setHov] = useState(false);
-  return (<div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ background: C.card, borderRadius: 12, padding: 20, border: `1px solid ${C.borderLight}`, boxShadow: onClick && hov ? "0 4px 12px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.04)", cursor: onClick ? "pointer" : "default", transform: onClick && hov ? "translateY(-1px)" : "none", transition: "all 0.2s", ...sx }}>{children}</div>);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        background: C.card, borderRadius: 14, padding: 20,
+        border: `1px solid ${hov && onClick ? C.primary + "40" : C.borderLight}`,
+        boxShadow: onClick && hov
+          ? "0 8px 24px rgba(26,79,186,0.12)"
+          : "0 1px 4px rgba(13,31,56,0.06)",
+        cursor: onClick ? "pointer" : "default",
+        transform: onClick && hov ? "translateY(-2px)" : "none",
+        transition: "all 0.2s ease", ...sx
+      }}>
+      {children}
+    </div>
+  );
 };
 
-const Badge = ({ children, color = C.primary }) => (<span style={{ display: "inline-block", padding: "2px 10px", fontSize: 12, fontWeight: 600, borderRadius: 20, background: color + "18", color }}>{children}</span>);
+const Badge = ({ children, color = C.primary }) => (
+  <span style={{ display: "inline-block", padding: "3px 12px", fontSize: 12, fontWeight: 700, borderRadius: 20, background: color + "18", color, letterSpacing: "0.02em", border: `1px solid ${color}25` }}>
+    {children}
+  </span>
+);
 
-const inputStyle = { width: "100%", padding: "10px 12px", fontSize: 14, fontFamily: ff, border: `1.5px solid ${C.borderLight}`, borderRadius: 8, background: C.inputBg, color: C.text, outline: "none", boxSizing: "border-box", transition: "border-color 0.2s" };
+const inputStyle = { width: "100%", padding: "10px 14px", fontSize: 14, fontFamily: ff, border: `1.5px solid ${C.borderLight}`, borderRadius: 10, background: C.inputBg, color: C.text, outline: "none", boxSizing: "border-box", transition: "border-color 0.2s, box-shadow 0.2s" };
 
 // ═══════════════════════════════════════════════════
 // 3) CALIDAD DE CAMA — Protocolo estandarizado
@@ -3330,6 +3379,14 @@ export default function DairyAuditApp() {
   const [clientTemplate, setClientTemplate] = useState(null); // plantilla guardada del cliente
   const [prevVisit, setPrevVisit] = useState(null); // visita anterior para comparación
 
+  // ── Sistema de roles ──
+  const [loginMode, setLoginMode] = useState("tecnico"); // "tecnico" | "cliente"
+  const [codeInput, setCodeInput] = useState("");
+  const [portalClient, setPortalClient] = useState(null);   // cliente en modo portal
+  const [portalVisits, setPortalVisits] = useState([]);     // visitas del cliente portal
+  const [portalSelVisit, setPortalSelVisit] = useState(null); // visita seleccionada en portal
+  const [portalSelCat, setPortalSelCat] = useState(null);
+
   const toggleSection = (secId) => {
     setExpandedSections(prev => ({ ...prev, [secId]: !prev[secId] }));
   };
@@ -3469,6 +3526,75 @@ const handleLogout = async () => {
   setVw("login");
 };
 
+// ── Portal de cliente ──────────────────────────────────────
+
+// Genera un código único de 6 caracteres alfanumérico (ej: NUT4K2)
+const generateCode = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin caracteres confusos
+  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+};
+
+// Guarda o regenera el access_code de un cliente
+const saveClientCode = async (client, newCode) => {
+  const code = newCode || generateCode();
+  const { error } = await supabase
+    .from("clients")
+    .update({ access_code: code })
+    .eq("id", client.id);
+  if (error) return flash("Error guardando código: " + error.message, "error");
+  // Actualizar estado local
+  setClients(prev => prev.map(c => c.id === client.id ? { ...c, access_code: code } : c));
+  if (selClient?.id === client.id) setSelClient(prev => ({ ...prev, access_code: code }));
+  flash("Código generado: " + code);
+  return code;
+};
+
+// Login del cliente por código
+const handleClientLogin = async () => {
+  const code = codeInput.trim().toUpperCase();
+  if (code.length < 4) return flash("Ingresá el código de acceso", "error");
+
+  try {
+    // Buscar cliente por código via RPC (bypasa RLS)
+    const { data: clientData, error: ce } = await supabase
+      .rpc("get_client_by_code", { p_code: code });
+
+    if (ce) return flash("Error de conexión: " + ce.message, "error");
+    if (!clientData || clientData.length === 0)
+      return flash("Código inválido o no encontrado", "error");
+
+    const foundClient = clientData[0];
+
+    // Cargar sus visitas
+    const { data: visitData, error: ve } = await supabase
+      .rpc("get_visits_by_client_code", { p_code: code });
+
+    if (ve) return flash("Error cargando visitas: " + ve.message, "error");
+
+    setPortalClient(foundClient);
+    setPortalVisits((visitData || []).map(v => ({
+      ...v,
+      clientId: v.client_id,
+      categoryId: v.category_id,
+      updatedAt: v.updated_at,
+    })));
+    setCodeInput("");
+    setVw("clientPortal");
+  } catch (e) {
+    flash("Error inesperado: " + e.message, "error");
+  }
+};
+
+// Salir del portal del cliente
+const handlePortalLogout = () => {
+  setPortalClient(null);
+  setPortalVisits([]);
+  setPortalSelVisit(null);
+  setPortalSelCat(null);
+  setVw("login");
+  setLoginMode("cliente");
+};
+
   // Clients
  const saveClient = async () => {
   try {
@@ -3587,21 +3713,19 @@ const deleteVisit = async (v) => {
 };
 
 const Toast = msg && (
-  <div
-    style={{
-      position: "fixed",
-      top: 20,
-      right: 20,
-      zIndex: 1000,
-      padding: "12px 20px",
-      borderRadius: 10,
-      fontSize: 14,
-      fontWeight: 600,
-      background: msg.type === "error" ? C.danger : C.success,
-      color: "#fff",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-    }}
-  >
+  <div style={{
+    position: "fixed", top: 24, right: 24, zIndex: 9999,
+    padding: "13px 20px 13px 16px", borderRadius: 12, fontSize: 14, fontWeight: 600,
+    fontFamily: ff, display: "flex", alignItems: "center", gap: 10,
+    background: msg.type === "error" ? C.danger : C.success,
+    color: "#fff",
+    boxShadow: msg.type === "error"
+      ? "0 6px 24px rgba(196,43,43,0.35)"
+      : "0 6px 24px rgba(13,125,71,0.35)",
+    animation: "fadeIn 0.2s ease",
+    maxWidth: 360,
+  }}>
+    <span style={{ fontSize: 18 }}>{msg.type === "error" ? "⚠️" : "✅"}</span>
     {msg.text}
   </div>
 );
@@ -3609,92 +3733,446 @@ const Toast = msg && (
 
   // ── LOGIN/REGISTER ──
   if (vw === "login" || vw === "register") return (
-    <div style={{ fontFamily: ff, minHeight: "100vh", background: `linear-gradient(135deg, ${C.primaryDark} 0%, ${C.primary} 50%, ${C.primaryLight} 100%)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ fontFamily: ff, minHeight: "100vh", display: "flex", alignItems: "stretch" }}>
       {Toast}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap'); * { box-sizing: border-box; }`}</style>
-      <div style={{ width: "100%", maxWidth: 420 }}>
-        <div style={{ textAlign: "center", marginBottom: 32, color: "#fff" }}>
-          <div style={{ fontSize: 48 }}>🐄</div>
-          <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 32, margin: "8px 0 0", fontWeight: 700, letterSpacing: 1 }}>NutriSur</h1>
-          <p style={{ fontSize: 14, opacity: 0.8 }}>Sistema de Auditoría Lechera</p>
+      {/* Panel izquierdo — Branding */}
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        background: `linear-gradient(155deg, ${C.primaryDark} 0%, ${C.primary} 55%, ${C.primaryLight} 100%)`,
+        padding: "60px 40px", color: "#fff", minHeight: "100vh",
+        position: "relative", overflow: "hidden",
+      }}>
+        <div style={{ position: "absolute", top: -80, right: -80, width: 300, height: 300, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
+        <div style={{ position: "absolute", bottom: -60, left: -60, width: 240, height: 240, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
+        <div style={{ position: "absolute", top: "40%", left: "5%", width: 120, height: 120, borderRadius: "50%", background: "rgba(0,169,224,0.15)" }} />
+        <div style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 380 }}>
+          <div style={{ width: 80, height: 80, borderRadius: 20, background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, margin: "0 auto 24px", border: "1.5px solid rgba(255,255,255,0.25)", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>🐄</div>
+          <h1 style={{ fontFamily: ffSerif, fontSize: 42, margin: "0 0 6px", fontWeight: 700, letterSpacing: 1 }}>Nutrisur</h1>
+          <p style={{ fontSize: 14, opacity: 0.75, letterSpacing: 2, textTransform: "uppercase", fontWeight: 600, margin: "0 0 32px" }}>Excelencia en Nutrición Animal</p>
+          <div style={{ width: 40, height: 2, background: "rgba(255,255,255,0.4)", margin: "0 auto 32px" }} />
+          <p style={{ fontSize: 15, opacity: 0.85, lineHeight: 1.7, margin: 0 }}>
+            Sistema de visitas y auditoría técnica para el seguimiento integral de establecimientos lecheros.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 32, justifyContent: "center" }}>
+            {["Registro de visitas", "Análisis técnico", "Historial de clientes", "Informes"].map(f => (
+              <span key={f} style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 600 }}>{f}</span>
+            ))}
+          </div>
         </div>
-        <Card style={{ padding: 32 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 0, marginBottom: 20 }}>{vw === "login" ? "Iniciar sesión" : "Crear cuenta"}</h2>
-          {vw === "register" && <div style={{ marginBottom: 14 }}><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Nombre completo</label><input type="text" placeholder="Tu nombre" value={loginForm.nombre} onChange={e => setLoginForm({ ...loginForm, nombre: e.target.value })} style={inputStyle} /></div>}
-          <div style={{ marginBottom: 14 }}><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Usuario</label><input type="text" placeholder="tu_usuario" value={loginForm.username} onChange={e => setLoginForm({ ...loginForm, username: e.target.value })} style={inputStyle} onKeyDown={e => e.key === "Enter" && (vw === "login" ? handleLogin() : handleRegister())} /></div>
-          <div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Contraseña</label><input type="password" placeholder="••••••••" value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} style={inputStyle} onKeyDown={e => e.key === "Enter" && (vw === "login" ? handleLogin() : handleRegister())} /></div>
-          <Btn onClick={vw === "login" ? handleLogin : handleRegister} style={{ width: "100%", justifyContent: "center", padding: "12px 0" }} size="lg">{vw === "login" ? "Ingresar" : "Crear cuenta"}</Btn>
-          <p style={{ textAlign: "center", marginTop: 16, fontSize: 14, color: C.textLight }}>{vw === "login" ? "¿No tenés cuenta?" : "¿Ya tenés cuenta?"} <span onClick={() => setVw(vw === "login" ? "register" : "login")} style={{ color: C.primary, cursor: "pointer", fontWeight: 600 }}>{vw === "login" ? "Registrate" : "Iniciar sesión"}</span></p>
-        </Card>
+      </div>
+
+      {/* Panel derecho — Formulario */}
+      <div style={{ width: 480, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 48px", minHeight: "100vh", boxShadow: "-4px 0 40px rgba(13,31,56,0.12)" }}>
+        <div style={{ width: "100%" }}>
+
+          {/* Selector de rol: Técnico / Cliente */}
+          <div style={{ display: "flex", background: C.bg, borderRadius: 12, padding: 4, marginBottom: 32, border: `1px solid ${C.borderLight}` }}>
+            {[
+              { id: "tecnico", label: "🔧 Soy técnico", desc: "Acceso completo" },
+              { id: "cliente", label: "🏡 Soy cliente", desc: "Con mi código" },
+            ].map(m => (
+              <button key={m.id} onClick={() => setLoginMode(m.id)}
+                style={{
+                  flex: 1, padding: "10px 8px", border: "none", cursor: "pointer",
+                  borderRadius: 10, fontFamily: ff, transition: "all 0.18s",
+                  background: loginMode === m.id ? "#fff" : "transparent",
+                  boxShadow: loginMode === m.id ? "0 2px 8px rgba(26,79,186,0.12)" : "none",
+                  color: loginMode === m.id ? C.primary : C.textLight,
+                }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{m.label}</div>
+                <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>{m.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* ── MODO TÉCNICO ── */}
+          {loginMode === "tecnico" && (
+            <>
+              <div style={{ marginBottom: 28 }}>
+                <h2 style={{ fontFamily: ffSerif, fontSize: 24, margin: "0 0 4px", color: C.text, fontWeight: 700 }}>
+                  {vw === "login" ? "Bienvenido de nuevo" : "Crear cuenta"}
+                </h2>
+                <p style={{ fontSize: 14, color: C.textLight, margin: 0 }}>
+                  {vw === "login" ? "Ingresá tus credenciales" : "Completá los datos para registrarte"}
+                </p>
+              </div>
+              {vw === "register" && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Nombre completo</label>
+                  <input type="text" placeholder="Ej: Carlos García" value={loginForm.nombre} onChange={e => setLoginForm({ ...loginForm, nombre: e.target.value })} style={inputStyle} />
+                </div>
+              )}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Email</label>
+                <input type="text" placeholder="tu@email.com" value={loginForm.username} onChange={e => setLoginForm({ ...loginForm, username: e.target.value })} style={inputStyle} onKeyDown={e => e.key === "Enter" && (vw === "login" ? handleLogin() : handleRegister())} autoComplete="username" />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Contraseña</label>
+                <input type="password" placeholder="••••••••" value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} style={inputStyle} onKeyDown={e => e.key === "Enter" && (vw === "login" ? handleLogin() : handleRegister())} autoComplete="current-password" />
+              </div>
+              <button onClick={vw === "login" ? handleLogin : handleRegister}
+                style={{ width: "100%", padding: "14px 0", fontSize: 15, fontWeight: 700, fontFamily: ff, background: `linear-gradient(135deg, ${C.primary}, ${C.primaryLight})`, color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", boxShadow: `0 4px 18px rgba(26,79,186,0.35)`, transition: "all 0.2s ease" }}>
+                {vw === "login" ? "Ingresar →" : "Crear cuenta →"}
+              </button>
+              <p style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: C.textLight }}>
+                {vw === "login" ? "¿No tenés cuenta? " : "¿Ya tenés cuenta? "}
+                <span onClick={() => setVw(vw === "login" ? "register" : "login")} style={{ color: C.primary, cursor: "pointer", fontWeight: 700 }}>
+                  {vw === "login" ? "Registrate" : "Iniciar sesión"}
+                </span>
+              </p>
+            </>
+          )}
+
+          {/* ── MODO CLIENTE ── */}
+          {loginMode === "cliente" && (
+            <>
+              <div style={{ marginBottom: 28 }}>
+                <h2 style={{ fontFamily: ffSerif, fontSize: 24, margin: "0 0 4px", color: C.text, fontWeight: 700 }}>
+                  Acceso para clientes
+                </h2>
+                <p style={{ fontSize: 14, color: C.textLight, margin: 0 }}>
+                  Ingresá el código que te proporcionó tu técnico Nutrisur
+                </p>
+              </div>
+
+              {/* Input código estilo grande */}
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 8 }}>
+                  Código de acceso
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: NUT4K2"
+                  value={codeInput}
+                  onChange={e => setCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                  onKeyDown={e => e.key === "Enter" && handleClientLogin()}
+                  maxLength={6}
+                  autoComplete="off"
+                  style={{
+                    ...inputStyle,
+                    fontSize: 28, fontWeight: 800, letterSpacing: 8,
+                    textAlign: "center", padding: "16px 14px",
+                    borderColor: codeInput.length === 6 ? C.primary : C.borderLight,
+                    borderWidth: 2,
+                  }}
+                />
+                {/* Indicador de caracteres */}
+                <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 10 }}>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} style={{ width: 10, height: 10, borderRadius: "50%", background: i < codeInput.length ? C.primary : C.borderLight, transition: "background 0.15s" }} />
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={handleClientLogin}
+                disabled={codeInput.length < 4}
+                style={{
+                  width: "100%", padding: "14px 0", fontSize: 15, fontWeight: 700, fontFamily: ff,
+                  background: codeInput.length >= 4 ? `linear-gradient(135deg, ${C.primary}, ${C.primaryLight})` : C.borderLight,
+                  color: codeInput.length >= 4 ? "#fff" : C.textLight,
+                  border: "none", borderRadius: 12, cursor: codeInput.length >= 4 ? "pointer" : "not-allowed",
+                  boxShadow: codeInput.length >= 4 ? `0 4px 18px rgba(26,79,186,0.35)` : "none",
+                  transition: "all 0.2s ease",
+                }}>
+                Ver mi historial →
+              </button>
+
+              {/* Info */}
+              <div style={{ marginTop: 24, padding: "14px 16px", background: C.bg, borderRadius: 10, border: `1px solid ${C.borderLight}` }}>
+                <div style={{ fontSize: 13, color: C.textLight, lineHeight: 1.6 }}>
+                  <strong style={{ color: C.text }}>¿No tenés código?</strong><br />
+                  Contactá a tu técnico de Nutrisur para que te asigne tu código de acceso personal.
+                </div>
+              </div>
+            </>
+          )}
+
+          <div style={{ marginTop: 32, paddingTop: 20, borderTop: `1px solid ${C.borderLight}`, textAlign: "center" }}>
+            <p style={{ fontSize: 12, color: C.textLight, margin: 0 }}>Nutrisur UY · Ruta 5 Km 28.5, Progreso, Canelones</p>
+          </div>
+        </div>
       </div>
     </div>
   );
 
   // ── LAYOUT ──
+  const navItems = [
+    { id: "dashboard", label: "Inicio", icon: "home", views: ["dashboard"] },
+    { id: "clients", label: "Clientes", icon: "users", views: ["clients","clientDetail","newClient","newVisit","viewVisit","startVisit"] },
+    { id: "informes", label: "Informes", icon: "chart", views: ["informes"] },
+  ];
   const Header = (
-    <div style={{ background: `linear-gradient(90deg, ${C.primaryDark} 0%, ${C.primary} 100%)`, color: "#fff", padding: "0 28px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 0 rgba(255,255,255,0.08), 0 4px 20px rgba(13,71,161,0.35)" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap'); * { box-sizing: border-box; }`}</style>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🐄</div>
+    <div style={{
+      background: `linear-gradient(90deg, ${C.primaryDark} 0%, ${C.primary} 60%, ${C.primaryLight} 100%)`,
+      color: "#fff", padding: "0 32px", height: 62,
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      position: "sticky", top: 0, zIndex: 100,
+      boxShadow: "0 2px 20px rgba(14,46,114,0.4)",
+    }}>
+      {/* Logo */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
+        onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}>
+        <div style={{
+          width: 38, height: 38, borderRadius: 10,
+          background: "rgba(255,255,255,0.18)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 20, border: "1px solid rgba(255,255,255,0.25)",
+        }}>🐄</div>
         <div>
-          <span style={{ fontFamily: ffSerif, fontSize: 20, fontWeight: 700, letterSpacing: 0.3 }}>NutriSur</span>
-          <span style={{ fontSize: 11, opacity: 0.55, marginLeft: 10, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 500 }}>Auditoría Lechera</span>
+          <div style={{ fontFamily: ffSerif, fontSize: 20, fontWeight: 700, letterSpacing: 0.5, lineHeight: 1.2 }}>Nutrisur</div>
+          <div style={{ fontSize: 10, opacity: 0.6, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, lineHeight: 1 }}>Auditoría Lechera</div>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "5px 14px", fontSize: 13, fontWeight: 500 }}>
-          <span style={{ opacity: 0.7 }}>👤</span>
+      {/* Nav tabs centrados */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        {navItems.map(item => {
+          const active = item.views.includes(vw);
+          return (
+            <button key={item.id} onClick={() => {
+              if (item.id === "dashboard") { setVw("dashboard"); setSelClient(null); setSelCat(null); setSelVisit(null); }
+              else setVw(item.id);
+            }} style={{
+              display: "flex", alignItems: "center", gap: 7, padding: "8px 18px",
+              background: active ? "rgba(255,255,255,0.18)" : "transparent",
+              color: active ? "#fff" : "rgba(255,255,255,0.65)",
+              border: "none", borderRadius: 10, cursor: "pointer",
+              fontSize: 14, fontWeight: active ? 700 : 500, fontFamily: ff,
+              transition: "all 0.18s",
+              borderBottom: active ? "2px solid rgba(255,255,255,0.9)" : "2px solid transparent",
+            }}>
+              <Icon name={item.icon} size={16} />
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+      {/* User + logout */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: "rgba(255,255,255,0.13)", borderRadius: 22,
+          padding: "6px 16px 6px 10px", fontSize: 13, fontWeight: 600,
+          border: "1px solid rgba(255,255,255,0.2)",
+        }}>
+          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>
+            {(user?.user_metadata?.nombre || user?.email || "T")[0].toUpperCase()}
+          </div>
           <span>{user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</span>
         </div>
-        <Btn variant="ghost" size="sm" icon="logout" onClick={handleLogout} style={{ color: "rgba(255,255,255,0.75)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8 }}>Salir</Btn>
+        <button onClick={handleLogout} style={{
+          display: "flex", alignItems: "center", gap: 6, padding: "6px 14px",
+          background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)",
+          border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8,
+          cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: ff,
+          transition: "all 0.18s",
+        }}>
+          <Icon name="logout" size={15} />
+          Salir
+        </button>
       </div>
     </div>
   );
-  const Nav = (
-    <div style={{ display: "flex", gap: 4, padding: "10px 28px", background: "#fff", borderBottom: `1px solid ${C.borderLight}`, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-      <Btn variant={vw === "dashboard" ? "primary" : "ghost"} size="sm" icon="home" onClick={() => { setVw("dashboard"); setSelClient(null); setSelCat(null); setSelVisit(null); }}>Inicio</Btn>
-      <Btn variant={["clients","clientDetail","newClient","newVisit","viewVisit","startVisit"].includes(vw) ? "primary" : "ghost"} size="sm" icon="users" onClick={() => setVw("clients")}>Clientes</Btn>
-      <Btn variant={vw === "informes" ? "primary" : "ghost"} size="sm" icon="chart" onClick={() => setVw("informes")}>Informes</Btn>
-    </div>
-  );
+  // Nav integrado en el Header — no se usa como variable separada
 
   // ── DASHBOARD ──
   const Dashboard = (
-    <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, marginBottom: 4 }}>Bienvenido, {user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</h2>
-      <p style={{ color: C.textLight, marginBottom: 24, fontSize: 15 }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
-        <Card style={{ textAlign: "center", background: `linear-gradient(135deg, ${C.primary}, ${C.primaryLight})`, color: "#fff", border: "none" }}><div style={{ fontSize: 32, fontWeight: 700 }}>{clients.length}</div><div style={{ fontSize: 13, opacity: 0.9 }}>Clientes</div></Card>
+    <div style={{ padding: "32px 36px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+      {/* Header bienvenida */}
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ fontFamily: ffSerif, fontSize: 28, marginBottom: 4, color: C.text, fontWeight: 700 }}>
+          Bienvenido, {user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"} 👋
+        </h2>
+        <p style={{ color: C.textLight, margin: 0, fontSize: 15, textTransform: "capitalize" }}>
+          {new Date().toLocaleDateString("es-UY", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+        </p>
       </div>
-      <h3 style={{ margin: "0 0 12px", fontSize: 18 }}>Acciones rápidas</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-        <Card onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}><div style={{ display: "flex", alignItems: "center", gap: 12 }}><div style={{ width: 44, height: 44, borderRadius: 10, background: C.primary + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="plus" color={C.primary} size={22} /></div><div><div style={{ fontWeight: 600, fontSize: 15 }}>Nuevo Cliente</div><div style={{ fontSize: 13, color: C.textLight }}>Agregar establecimiento</div></div></div></Card>
-        <Card onClick={() => setVw("clients")}><div style={{ display: "flex", alignItems: "center", gap: 12 }}><div style={{ width: 44, height: 44, borderRadius: 10, background: C.accent + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="clipboard" color={C.accent} size={22} /></div><div><div style={{ fontWeight: 600, fontSize: 15 }}>Nueva Visita</div><div style={{ fontSize: 13, color: C.textLight }}>Seleccionar cliente</div></div></div></Card>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 36 }}>
+        <div style={{
+          background: `linear-gradient(135deg, ${C.primaryDark} 0%, ${C.primary} 100%)`,
+          borderRadius: 16, padding: "20px 24px", color: "#fff",
+          boxShadow: `0 6px 24px rgba(26,79,186,0.3)`,
+        }}>
+          <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{clients.length}</div>
+          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6, fontWeight: 500 }}>Clientes activos</div>
+          <div style={{ marginTop: 12, opacity: 0.5, fontSize: 22 }}>🏡</div>
+        </div>
+        <div style={{
+          background: `linear-gradient(135deg, #0D7D47 0%, #15A85F 100%)`,
+          borderRadius: 16, padding: "20px 24px", color: "#fff",
+          boxShadow: `0 6px 24px rgba(13,125,71,0.25)`,
+        }}>
+          <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{allVisitsCache.length || "—"}</div>
+          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6, fontWeight: 500 }}>Visitas totales</div>
+          <div style={{ marginTop: 12, opacity: 0.5, fontSize: 22 }}>📋</div>
+        </div>
       </div>
-      {clients.length > 0 && <><h3 style={{ marginTop: 32, marginBottom: 12 }}>Clientes recientes</h3>{clients.slice(0, 5).map(c => (<Card key={c.id} onClick={() => { setSelClient(c); setVw("clientDetail"); }} style={{ marginBottom: 8 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontWeight: 600 }}>{c.nombre}</div><div style={{ fontSize: 13, color: C.textLight }}>{c.establecimiento} — {c.localidad || "Sin loc."}</div></div><Icon name="eye" color={C.textLight} /></div></Card>))}</>}
+
+      {/* Acciones rápidas */}
+      <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>Acciones rápidas</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14, marginBottom: 36 }}>
+        <Card onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}
+          style={{ border: `1.5px solid ${C.primary}20` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 12, background: `linear-gradient(135deg, ${C.primary}18, ${C.primaryLight}15)`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.primary}20` }}>
+              <Icon name="plus" color={C.primary} size={24} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>Nuevo Cliente</div>
+              <div style={{ fontSize: 13, color: C.textLight, marginTop: 2 }}>Agregar establecimiento</div>
+            </div>
+            <div style={{ marginLeft: "auto" }}><Icon name="compare" color={C.primary} size={18} /></div>
+          </div>
+        </Card>
+        <Card onClick={() => setVw("clients")} style={{ border: `1.5px solid ${C.accent}20` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 12, background: `${C.accent}15`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.accent}30` }}>
+              <Icon name="clipboard" color={C.accent} size={24} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>Nueva Visita</div>
+              <div style={{ fontSize: 13, color: C.textLight, marginTop: 2 }}>Seleccionar cliente</div>
+            </div>
+            <div style={{ marginLeft: "auto" }}><Icon name="compare" color={C.accent} size={18} /></div>
+          </div>
+        </Card>
+        <Card onClick={() => setVw("informes")} style={{ border: `1.5px solid ${C.success}20` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 12, background: `${C.success}15`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.success}30` }}>
+              <Icon name="chart" color={C.success} size={24} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>Ver Informes</div>
+              <div style={{ fontSize: 13, color: C.textLight, marginTop: 2 }}>Estadísticas y análisis</div>
+            </div>
+            <div style={{ marginLeft: "auto" }}><Icon name="compare" color={C.success} size={18} /></div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Clientes recientes */}
+      {clients.length > 0 && (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>Clientes recientes</h3>
+            <button onClick={() => setVw("clients")} style={{ background: "none", border: "none", color: C.primary, cursor: "pointer", fontSize: 13, fontWeight: 700, padding: 0 }}>Ver todos →</button>
+          </div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {clients.slice(0, 5).map(c => (
+              <Card key={c.id} onClick={() => { setSelClient(c); setVw("clientDetail"); }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: `${C.primary}12`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, color: C.primary }}>
+                      {c.nombre[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{c.nombre}</div>
+                      <div style={{ fontSize: 12, color: C.textLight }}>{c.establecimiento}{c.localidad ? ` · ${c.localidad}` : ""}</div>
+                    </div>
+                  </div>
+                  <Icon name="compare" color={C.textLight} size={16} />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 
   // ── CLIENTS ──
   const ClientList = (
-    <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, margin: 0 }}>Clientes</h2><Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>Nuevo Cliente</Btn></div>
-      <input type="text" placeholder="Buscar..." value={searchQ} onChange={e => setSearchQ(e.target.value)} style={{ ...inputStyle, marginBottom: 20 }} />
-      {filteredClients.length === 0 ? <Card style={{ textAlign: "center", padding: 40 }}><div style={{ fontSize: 40 }}>🐄</div><p style={{ color: C.textLight }}>No hay clientes aún.</p></Card>
-        : filteredClients.map(c => (<Card key={c.id} style={{ marginBottom: 10 }} onClick={() => { setSelClient(c); setVw("clientDetail"); }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontWeight: 600, fontSize: 16 }}>{c.nombre}</div><div style={{ fontSize: 13, color: C.textLight }}>{c.establecimiento} {c.localidad ? `• ${c.localidad}` : ""}</div></div><Icon name="eye" color={C.primary} /></div></Card>))}
+    <div style={{ padding: "32px 36px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ fontFamily: ffSerif, fontSize: 26, margin: "0 0 4px", color: C.text, fontWeight: 700 }}>Clientes</h2>
+          <p style={{ margin: 0, fontSize: 14, color: C.textLight }}>{clients.length} establecimiento{clients.length !== 1 ? "s" : ""} registrado{clients.length !== 1 ? "s" : ""}</p>
+        </div>
+        <Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>
+          Nuevo Cliente
+        </Btn>
+      </div>
+      {/* Buscador */}
+      <div style={{ position: "relative", marginBottom: 20 }}>
+        <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }}>
+          <Icon name="search" size={17} color={C.textLight} />
+        </div>
+        <input type="text" placeholder="Buscar por nombre, establecimiento o localidad..."
+          value={searchQ} onChange={e => setSearchQ(e.target.value)}
+          style={{ ...inputStyle, paddingLeft: 42 }} />
+      </div>
+      {filteredClients.length === 0
+        ? (
+          <Card style={{ textAlign: "center", padding: "60px 40px" }}>
+            <div style={{ fontSize: 52, marginBottom: 12 }}>🐄</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: C.text, marginBottom: 6 }}>No hay clientes todavía</div>
+            <p style={{ color: C.textLight, margin: "0 0 20px" }}>Agregá tu primer establecimiento para comenzar</p>
+            <Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "" }); setVw("newClient"); }}>
+              Nuevo Cliente
+            </Btn>
+          </Card>
+        )
+        : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {filteredClients.map(c => (
+              <Card key={c.id} onClick={() => { setSelClient(c); setVw("clientDetail"); }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${C.primary}15, ${C.primaryLight}10)`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16, color: C.primary, border: `1px solid ${C.primary}20`, flexShrink: 0 }}>
+                      {c.nombre[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{c.nombre}</div>
+                      <div style={{ fontSize: 13, color: C.textLight, marginTop: 2 }}>
+                        {c.establecimiento}{c.localidad ? ` · ${c.localidad}` : ""}{c.provincia ? `, ${c.provincia}` : ""}
+                      </div>
+                      {c.contacto && <div style={{ fontSize: 12, color: C.textLight, marginTop: 2 }}>📞 {c.contacto}</div>}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.primary }}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>Ver detalle</span>
+                    <Icon name="compare" color={C.primary} size={16} />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )
+      }
     </div>
   );
 
   // ── NEW CLIENT ──
   const NewClient = (
-    <div style={{ padding: "24px 32px", maxWidth: 700, margin: "0 auto", width: "100%" }}>
-      <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clients")} style={{ marginBottom: 16 }}>Volver</Btn>
-      <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, marginBottom: 20 }}>{clientForm.id ? "Editar Cliente" : "Nuevo Cliente"}</h2>
-      <Card>
-        {[{ key: "nombre", label: "Nombre *", ph: "Ej: Juan Pérez" }, { key: "establecimiento", label: "Establecimiento *", ph: "Ej: Estancia La Aurora" }, { key: "localidad", label: "Localidad", ph: "Ej: Trenque Lauquen" }, { key: "provincia", label: "Provincia", ph: "Buenos Aires" }, { key: "contacto", label: "Teléfono", ph: "+54 9 11 1234-5678" }, { key: "email", label: "Email", ph: "juan@campo.com" }].map(({ key, label, ph }) => (
-          <div key={key} style={{ marginBottom: 16 }}><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>{label}</label><input type="text" placeholder={ph} value={clientForm[key]} onChange={e => setClientForm({ ...clientForm, [key]: e.target.value })} style={inputStyle} /></div>
-        ))}
-        <div style={{ display: "flex", gap: 10 }}><Btn icon="save" onClick={saveClient}>Guardar</Btn><Btn variant="outline" onClick={() => setVw("clients")}>Cancelar</Btn></div>
+    <div style={{ padding: "32px 36px", maxWidth: 680, margin: "0 auto", width: "100%" }}>
+      <button onClick={() => setVw("clients")} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textLight, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: ff, padding: "6px 0", marginBottom: 24 }}>
+        <Icon name="back" size={16} color={C.textLight} /> Volver a clientes
+      </button>
+      <h2 style={{ fontFamily: ffSerif, fontSize: 26, marginBottom: 4, color: C.text, fontWeight: 700 }}>
+        {clientForm.id ? "Editar Cliente" : "Nuevo Cliente"}
+      </h2>
+      <p style={{ color: C.textLight, margin: "0 0 28px", fontSize: 14 }}>Completá los datos del establecimiento</p>
+      <Card style={{ padding: 28 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          {[
+            { key: "nombre", label: "Nombre del responsable *", ph: "Ej: Juan García", span: 2 },
+            { key: "establecimiento", label: "Nombre del establecimiento *", ph: "Ej: Tambo La Aurora", span: 2 },
+            { key: "localidad", label: "Localidad", ph: "Ej: Progreso" },
+            { key: "provincia", label: "Departamento / Provincia", ph: "Canelones" },
+            { key: "contacto", label: "Teléfono", ph: "+598 99 123 456" },
+            { key: "email", label: "Email", ph: "cliente@tambo.com" },
+          ].map(({ key, label, ph, span }) => (
+            <div key={key} style={{ gridColumn: span === 2 ? "1 / -1" : undefined }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>{label}</label>
+              <input type="text" placeholder={ph} value={clientForm[key] || ""} onChange={e => setClientForm({ ...clientForm, [key]: e.target.value })} style={inputStyle} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.borderLight}` }}>
+          <Btn icon="save" onClick={saveClient}>Guardar cliente</Btn>
+          <Btn variant="outline" onClick={() => setVw("clients")}>Cancelar</Btn>
+        </div>
       </Card>
     </div>
   );
@@ -3741,6 +4219,44 @@ const fetchVisits = async (clientId) => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
           <div><h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 24, margin: 0 }}>{selClient.nombre}</h2><p style={{ color: C.textLight, marginTop: 4, marginBottom: 0 }}>{selClient.establecimiento} {selClient.localidad ? `• ${selClient.localidad}` : ""}</p>{selClient.contacto && <p style={{ fontSize: 13, color: C.textLight, margin: "4px 0 0" }}>📞 {selClient.contacto}</p>}</div>
           <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" icon="edit" size="sm" onClick={() => { setClientForm(selClient); setVw("newClient"); }}>Editar</Btn><Btn variant="danger" icon="trash" size="sm" onClick={() => deleteClient(selClient)}>Eliminar</Btn></div>
+        </div>
+      </Card>
+
+      {/* ── Código de acceso del cliente ── */}
+      <Card style={{ marginBottom: 24, border: `1.5px solid ${C.primary}25`, background: `${C.primary}04` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 11, background: `${C.primary}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, border: `1px solid ${C.primary}20` }}>🔑</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>Código de acceso del cliente</div>
+              <div style={{ fontSize: 13, color: C.textLight }}>El cliente usa este código para ver su historial de visitas</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {selClient?.access_code ? (
+              <>
+                <div style={{ background: "#fff", border: `2px solid ${C.primary}40`, borderRadius: 10, padding: "8px 20px", fontFamily: "'Courier New', monospace", fontSize: 22, fontWeight: 800, letterSpacing: 6, color: C.primary }}>
+                  {selClient.access_code}
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(selClient.access_code); flash("Código copiado al portapapeles"); }}
+                  title="Copiar código"
+                  style={{ padding: "8px 14px", background: `${C.primary}12`, border: `1px solid ${C.primary}30`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.primary, fontFamily: ff }}>
+                  📋 Copiar
+                </button>
+                <button
+                  onClick={() => { if (confirm("¿Regenerar el código? El anterior dejará de funcionar.")) saveClientCode(selClient); }}
+                  title="Regenerar código"
+                  style={{ padding: "8px 14px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 13, color: C.textLight, fontFamily: ff }}>
+                  🔄 Regenerar
+                </button>
+              </>
+            ) : (
+              <Btn icon="plus" onClick={() => saveClientCode(selClient)}>
+                Generar código
+              </Btn>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -4140,13 +4656,156 @@ const fetchVisits = async (clientId) => {
     />
   );
 
+  // ── PORTAL DEL CLIENTE ──────────────────────────────────────
+  const ClientPortal = portalClient && (
+    <div style={{ fontFamily: ff, minHeight: "100vh", background: C.bg, color: C.text }}>
+      {Toast}
+
+      {/* Header portal */}
+      <div style={{
+        background: `linear-gradient(90deg, ${C.primaryDark} 0%, ${C.primary} 100%)`,
+        color: "#fff", padding: "0 32px", height: 62,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        boxShadow: "0 2px 20px rgba(14,46,114,0.4)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🐄</div>
+          <div>
+            <div style={{ fontFamily: ffSerif, fontSize: 20, fontWeight: 700, letterSpacing: 0.5 }}>Nutrisur</div>
+            <div style={{ fontSize: 10, opacity: 0.6, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>Portal del Cliente</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.13)", borderRadius: 22, padding: "6px 16px 6px 10px", fontSize: 13, fontWeight: 600, border: "1px solid rgba(255,255,255,0.2)" }}>
+            <div style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>
+              {(portalClient.nombre || "C")[0].toUpperCase()}
+            </div>
+            <span>{portalClient.nombre}</span>
+          </div>
+          <button onClick={handlePortalLogout} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: ff }}>
+            <Icon name="logout" size={15} /> Salir
+          </button>
+        </div>
+      </div>
+
+      {/* Contenido del portal */}
+      {!portalSelVisit ? (
+        // ── Vista: listado de visitas del cliente ──
+        <div style={{ padding: "32px 36px", maxWidth: 900, margin: "0 auto" }}>
+          {/* Info del establecimiento */}
+          <Card style={{ marginBottom: 28, background: `linear-gradient(135deg, ${C.primaryDark}08, ${C.primary}05)`, border: `1.5px solid ${C.primary}20` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 56, height: 56, borderRadius: 14, background: `linear-gradient(135deg, ${C.primary}18, ${C.primaryLight}12)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, border: `1px solid ${C.primary}20`, flexShrink: 0 }}>🏡</div>
+              <div>
+                <h2 style={{ fontFamily: ffSerif, fontSize: 22, margin: "0 0 4px", color: C.text, fontWeight: 700 }}>{portalClient.establecimiento || portalClient.nombre}</h2>
+                <div style={{ fontSize: 14, color: C.textLight, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  {portalClient.localidad && <span>📍 {portalClient.localidad}{portalClient.provincia ? `, ${portalClient.provincia}` : ""}</span>}
+                  {portalClient.contacto && <span>📞 {portalClient.contacto}</span>}
+                </div>
+              </div>
+              <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: C.primary }}>{portalVisits.length}</div>
+                <div style={{ fontSize: 12, color: C.textLight, fontWeight: 600 }}>visita{portalVisits.length !== 1 ? "s" : ""} registrada{portalVisits.length !== 1 ? "s" : ""}</div>
+              </div>
+            </div>
+          </Card>
+
+          <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700, color: C.text }}>Historial de visitas técnicas</h3>
+
+          {portalVisits.length === 0 ? (
+            <Card style={{ textAlign: "center", padding: "50px 40px" }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
+              <div style={{ fontWeight: 700, fontSize: 16, color: C.text, marginBottom: 6 }}>Sin visitas registradas</div>
+              <p style={{ color: C.textLight, margin: 0 }}>Las visitas técnicas aparecerán aquí una vez que tu técnico las registre.</p>
+            </Card>
+          ) : (
+            <div style={{ display: "grid", gap: 12 }}>
+              {portalVisits.map(v => {
+                const cat = CATEGORIES.find(c => c.id === (v.categoryId || v.category_id));
+                return (
+                  <Card key={v.id} onClick={() => { setPortalSelVisit(v); setPortalSelCat(cat); }} style={{ cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 12, background: (cat?.color || C.primary) + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: `1px solid ${(cat?.color || C.primary)}30` }}>
+                        <Icon name={cat?.icon || "clipboard"} color={cat?.color || C.primary} size={22} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{cat?.name || v.categoryId}</div>
+                        <div style={{ fontSize: 13, color: C.textLight, marginTop: 2, display: "flex", gap: 14, flexWrap: "wrap" }}>
+                          <span>📅 {fmt(v.fecha)}</span>
+                          {v.tecnico && <span>👨‍🔬 {v.tecnico}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Badge color={cat?.color || C.primary}>Ver informe</Badge>
+                        <Icon name="compare" color={C.textLight} size={16} />
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        // ── Vista: detalle de una visita (solo lectura) ──
+        <div style={{ padding: "24px 36px", maxWidth: 900, margin: "0 auto" }}>
+          <button onClick={() => { setPortalSelVisit(null); setPortalSelCat(null); }}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textLight, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: ff, padding: "6px 0", marginBottom: 20 }}>
+            <Icon name="back" size={16} color={C.textLight} /> Volver al historial
+          </button>
+
+          {/* Header de la visita */}
+          <Card style={{ marginBottom: 20, borderLeft: `4px solid ${portalSelCat?.color || C.primary}` }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+              <div style={{ width: 50, height: 50, borderRadius: 12, background: (portalSelCat?.color || C.primary) + "18", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name={portalSelCat?.icon || "clipboard"} color={portalSelCat?.color || C.primary} size={26} />
+              </div>
+              <div>
+                <h2 style={{ fontFamily: ffSerif, fontSize: 20, margin: "0 0 4px", fontWeight: 700 }}>{portalSelCat?.name || portalSelVisit.categoryId}</h2>
+                <div style={{ fontSize: 13, color: C.textLight, display: "flex", gap: 14 }}>
+                  <span>📅 {fmt(portalSelVisit.fecha)}</span>
+                  {portalSelVisit.tecnico && <span>👨‍🔬 Técnico: {portalSelVisit.tecnico}</span>}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Secciones de la visita */}
+          {(portalSelCat?.sections || []).map(sec => {
+            const secData = portalSelVisit.data || {};
+            const hasContent = sec.fields.some(f => secData[f.id]) || sec.customComponent;
+            if (!hasContent) return null;
+            return (
+              <Card key={sec.id} style={{ marginBottom: 14 }}>
+                <h4 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700, color: C.text, paddingBottom: 10, borderBottom: `1px solid ${C.borderLight}` }}>{sec.title}</h4>
+                {sec.subtitle && <p style={{ fontSize: 13, color: C.textLight, margin: "0 0 12px", fontStyle: "italic" }}>{sec.subtitle}</p>}
+                <div style={{ display: "grid", gap: 8 }}>
+                  {sec.fields.filter(f => secData[f.id]).map(f => (
+                    <div key={f.id} style={{ display: "flex", gap: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.textLight, minWidth: 180, flexShrink: 0 }}>{f.label}:</span>
+                      <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>{String(secData[f.id])}{f.unit ? ` ${f.unit}` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Si está en portal de cliente, renderizar portal ──
+  if (vw === "clientPortal" && portalClient) return ClientPortal;
+
   const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
 
 return (
   <div style={{ fontFamily: ff, minHeight: "100vh", background: C.bg, color: C.text }}>
     {Toast}
     {Header}
-    {Nav}
-    {views[vw]}
+    <div style={{ minHeight: "calc(100vh - 62px)" }}>
+      {views[vw]}
+    </div>
   </div>
 )} 
