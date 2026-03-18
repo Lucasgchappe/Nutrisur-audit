@@ -3422,6 +3422,12 @@ export default function DairyAuditApp() {
   const [activeSections, setActiveSections] = useState(null); // null = todas activas
   const [clientTemplate, setClientTemplate] = useState(null); // plantilla guardada del cliente
   const [prevVisit, setPrevVisit] = useState(null); // visita anterior para comparación
+  const [draftBanner, setDraftBanner] = useState(false); // banner de borrador recuperable
+
+  // Clave única de borrador por usuario/cliente/módulo
+  const draftKey = user && selClient && selCat
+    ? `dairy_draft_${user.id}_${selClient.id}_${selCat.id}`
+    : null;
 
   // ── Sistema de roles ──
   const [loginMode, setLoginMode] = useState("tecnico"); // "tecnico" | "cliente"
@@ -3510,6 +3516,51 @@ useEffect(() => {
     }
   })();
 }, [vw, user]);
+
+// ── Auto-save borrador mientras se llena la visita ──
+useEffect(() => {
+  if (vw !== "newVisit" || !draftKey || !selVisit) {
+    // Solo guardamos borradores en visitas NUEVAS (no edición)
+    if (vw !== "newVisit" || selVisit) return;
+  }
+  if (Object.keys(formData).length <= 1) return; // solo tiene _fecha, no vale guardar
+  const timer = setTimeout(() => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({
+        formData,
+        activeSections,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (_) {}
+  }, 800);
+  return () => clearTimeout(timer);
+}, [formData, vw]); // eslint-disable-line
+
+// ── Al entrar a newVisit (nueva), verificar si hay borrador ──
+useEffect(() => {
+  if (vw !== "newVisit" || selVisit || !draftKey) return;
+  try {
+    const raw = localStorage.getItem(draftKey);
+    if (raw) setDraftBanner(true);
+  } catch (_) {}
+}, [vw, draftKey]); // eslint-disable-line
+
+const recoverDraft = () => {
+  if (!draftKey) return;
+  try {
+    const raw = localStorage.getItem(draftKey);
+    if (!raw) return;
+    const { formData: fd, activeSections: as } = JSON.parse(raw);
+    if (fd) setFormData(fd);
+    if (as) setActiveSections(as);
+    setDraftBanner(false);
+  } catch (_) {}
+};
+
+const discardDraft = () => {
+  if (draftKey) { try { localStorage.removeItem(draftKey); } catch (_) {} }
+  setDraftBanner(false);
+};
 
 const filteredClients = (clients || []).filter(c => {
   const q = (searchQ || "").toLowerCase();
@@ -3731,6 +3782,9 @@ const saveVisit = async () => {
   if (error) return flash(error.message, "error");
 
   flash("Visita guardada");
+  // Limpiar borrador de localStorage
+  if (draftKey) { try { localStorage.removeItem(draftKey); } catch (_) {} }
+  setDraftBanner(false);
   setFormData({});
   setSelVisit(null);
   setVw("clientDetail");
@@ -4518,10 +4572,27 @@ const fetchVisits = async (clientId) => {
   const VisitForm = selCat && (
     <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clientDetail")} style={{ marginBottom: 16 }}>Volver</Btn>
+      {/* ── Banner de borrador recuperable ── */}
+      {draftBanner && vw === "newVisit" && !selVisit && (
+        <div style={{ background: "#FFF8E1", border: "1.5px solid #F59E0B", borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>📋</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#92400E" }}>Hay un borrador guardado para esta visita</div>
+              <div style={{ fontSize: 12, color: "#B45309" }}>Podés recuperarlo o empezar desde cero.</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={recoverDraft} style={{ padding: "7px 14px", background: "#F59E0B", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: ff }}>Recuperar</button>
+            <button onClick={discardDraft} style={{ padding: "7px 14px", background: "transparent", color: "#92400E", border: "1px solid #F59E0B", borderRadius: 8, cursor: "pointer", fontSize: 13, fontFamily: ff }}>Descartar</button>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <Badge color={selCat.color}>{selCat.name}</Badge>
-          <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 22, margin: "8px 0 0" }}>{vw === "viewVisit" ? "Detalle de Visita" : (selVisit ? "Editar Visita" : "Nueva Visita")}</h2>
+          <h2 style={{ fontFamily: ffSerif, fontSize: 22, margin: "8px 0 0" }}>{vw === "viewVisit" ? "Detalle de Visita" : (selVisit ? "Editar Visita" : "Nueva Visita")}</h2>
           <p style={{ color: C.textLight, fontSize: 14, margin: "4px 0 0" }}>{selClient.nombre} — {selClient.establecimiento}</p>
         </div>
         {vw !== "viewVisit" && <Btn icon="save" onClick={saveVisit}>Guardar Visita</Btn>}
@@ -4533,6 +4604,31 @@ const fetchVisits = async (clientId) => {
           <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Técnico</label><span style={{ fontSize: 14, fontWeight: 500 }}>{user?.user_metadata?.nombre || user?.email || "Técnico"}</span></div>
         </div>
       </Card>
+
+      {/* ── Barra de progreso ── */}
+      {vw !== "viewVisit" && (() => {
+        const visibleSections = selCat.sections.filter(s => !activeSections || activeSections.includes(s.id));
+        const filledCount = visibleSections.filter(sec =>
+          sec.customComponent
+            ? (sec.customComponent === "forage_stock"
+                ? (formData[`${sec.id}_stock`]?.length > 0 || sec.fields.some(f => !!formData[f.id]))
+                : !!formData[`${sec.id}_${sec.customComponent.replace("cowscore_","").replace("ph_scoring","ph").replace("forage_stock","stock")}`])
+            : sec.fields.some(f => !!formData[f.id])
+        ).length;
+        const pct = visibleSections.length > 0 ? Math.round(filledCount / visibleSections.length * 100) : 0;
+        const barColor = pct === 100 ? C.success : pct >= 50 ? selCat.color : C.warning;
+        return (
+          <div style={{ marginBottom: 16, background: C.card, borderRadius: 10, padding: "12px 16px", border: `1px solid ${C.borderLight}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Progreso de la visita</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: barColor }}>{filledCount} / {visibleSections.length} secciones con datos</span>
+            </div>
+            <div style={{ height: 8, background: C.borderLight, borderRadius: 99, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${pct}%`, background: barColor, borderRadius: 99, transition: "width 0.4s ease" }} />
+            </div>
+          </div>
+        );
+      })()}
 
       {selCat.sections.filter(sec => {
         if (!activeSections) return true;
