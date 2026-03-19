@@ -1838,6 +1838,7 @@ const FRESCAS_SECTIONS = [
     { id: "fr_ps_tmr_vs_ref", label: "Comparación TMR ofrecido vs refusas", type: "textarea", placeholder: "Diferencias de Penn State entre TMR fresco y rechazado..." },
     { id: "fr_ps_variab", label: "Variabilidad dentro del lote", type: "textarea", placeholder: "¿El promedio esconde problemas? Diferencias entre animales..." },
   ]},
+  { id: "fr_limpieza", title: "7d. Limpieza de ubre, patas y flanco", subtitle: "Score 1–5 por vaca (~15–20 vacas). Objetivo: <15% con score ≥3. (Schreiner & Ruegg, 2003)", customComponent: "cleanliness", fields: [] },
   { id: "fr_locomocion", title: "7e. Puntuación de Locomoción", subtitle: "Observación del lote en movimiento — escala 1 (normal) a 5 (cojera severa)", fields: [
     { id: "fr_loc_n_obs", label: "N° de vacas observadas", type: "number", placeholder: "Ej: 50" },
     { id: "fr_loc_pct_3mas", label: "% vacas con score 3 o más (cojera leve-severa)", type: "number", placeholder: "Ej: 12", unit: "%", note: "Objetivo: <10%. Score 3: carga irregular. Score 4-5: cojera evidente." },
@@ -1868,7 +1869,11 @@ const PRODUCCION_SECTIONS = [
     customComponent: "cowscore_heces", fields: [],
   },
   {
-    id: "vp_general", title: "3. Indicadores del lote", subtitle: "Rumiación, producción y observación de comedero",
+    id: "vp_limpieza", title: "3. Limpieza de ubre, patas y flanco", subtitle: "Score 1–5 por vaca — indicador de condiciones de piso, barro y bienestar",
+    customComponent: "cleanliness", fields: [],
+  },
+  {
+    id: "vp_general", title: "4. Indicadores del lote", subtitle: "Rumiación, producción y observación de comedero",
     fields: [
       { id: "vp_n_animales", label: "N° de animales evaluados", type: "number", placeholder: "Ej: 80" },
       { id: "vp_dim_promedio", label: "DIM promedio del lote", type: "number", placeholder: "Ej: 120", unit: "días" },
@@ -1878,7 +1883,7 @@ const PRODUCCION_SECTIONS = [
     ],
   },
   {
-    id: "vp_plan", title: "4. Observaciones y Plan de Acción", subtitle: "Hallazgos principales y acciones priorizadas",
+    id: "vp_plan", title: "5. Observaciones y Plan de Acción", subtitle: "Hallazgos principales y acciones priorizadas",
     fields: [
       { id: "vp_hallazgos", label: "Principales hallazgos", type: "textarea", placeholder: "Resumen de puntos críticos observados...", rows: 4 },
       { id: "vp_acciones", label: "Acciones priorizadas", type: "textarea", placeholder: "1. ...\n2. ...\n3. ...", rows: 4 },
@@ -3060,6 +3065,7 @@ const METRICS = [
   { id: "heces",          label: "Score heces",               unit: "",    ref: [2, 3],       cat: "frescas",         extract: (v) => { const cs = v.data?.fr_heces_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
   { id: "rumen",          label: "Llenado ruminal",           unit: "",    ref: [3, 5],       cat: "frescas",         extract: (v) => { const cs = v.data?.fr_rumen_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
   { id: "locomocion",     label: "Cojera % (score ≥3)",       unit: "%",   ref: [0, 10],      cat: "frescas",         extract: (v) => parseFloat(v.data?.fr_locomocion_fr_loc_pct_3mas) || null },
+  { id: "limpieza_ubre",  label: "Limpieza ubre % ≥3",        unit: "%",   ref: [0, 15],      cat: "frescas",         extract: (v) => { const d = v.data?.fr_limpieza_cleanliness; if (!d?.cows?.length) return null; const s = d.cows.map(c=>parseFloat(c.ubre)).filter(x=>!isNaN(x)); return s.length ? round(s.filter(x=>x>=3).length/s.length*100,1) : null; } },
   { id: "rumiacion",      label: "Rumiando % (producción)",   unit: "%",   ref: [50, 70],     cat: "produccion",      extract: (v) => parseFloat(v.data?.vp_general_vp_pct_rumiando) || null },
   { id: "bcs_prod",       label: "BCS prod. promedio",        unit: "",    ref: [2.75, 3.5],  cat: "produccion",      extract: (v) => { const cs = v.data?.vp_bcs_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
 ];
@@ -3423,6 +3429,7 @@ export default function DairyAuditApp() {
   const [clientTemplate, setClientTemplate] = useState(null); // plantilla guardada del cliente
   const [prevVisit, setPrevVisit] = useState(null); // visita anterior para comparación
   const [draftBanner, setDraftBanner] = useState(false); // banner de borrador recuperable
+  const [wizardStep, setWizardStep] = useState(0);       // paso actual del wizard de visita
 
   // Clave única de borrador por usuario/cliente/módulo
   const draftKey = user && selClient && selCat
@@ -4463,6 +4470,7 @@ const fetchVisits = async (clientId) => {
           setSelVisit(v); setSelCat(cat);
           setFormData({ _fecha: v.fecha, ...v.data });
           const exp = {}; (cat.sections || []).forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
+          setWizardStep(0);
           setVw("viewVisit");
         }}
         onEdit={(v, catArg) => {
@@ -4471,6 +4479,7 @@ const fetchVisits = async (clientId) => {
           setSelVisit(v); setSelCat(cat);
           setFormData({ _fecha: v.fecha, ...v.data });
           const exp = {}; (cat.sections || []).forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
+          setWizardStep(0);
           setVw("newVisit");
         }}
         onDelete={(v) => deleteVisit(v)}
@@ -4558,6 +4567,7 @@ const fetchVisits = async (clientId) => {
           const exp = {};
           acts.forEach(id => { exp[id] = true; });
           setExpandedSections(exp);
+          setWizardStep(0);
           setVw("newVisit");
         }}
         style={{ width: "100%", justifyContent: "center", padding: "14px 0", fontSize: 16 }}
@@ -4630,27 +4640,55 @@ const fetchVisits = async (clientId) => {
         );
       })()}
 
-      {selCat.sections.filter(sec => {
-        if (!activeSections) return true;
-        return activeSections.includes(sec.id);
-      }).map((sec, secIdx, visibleSecs) => {
-        const isExpanded = expandedSections[sec.id] !== false;
+      {/* ── WIZARD: una sección a la vez ── */}
+      {(() => {
+        const visibleSecs = selCat.sections.filter(sec => !activeSections || activeSections.includes(sec.id));
+        const totalSteps = visibleSecs.length;
+        const safeStep = Math.min(wizardStep, totalSteps - 1);
+        const sec = visibleSecs[safeStep];
+        if (!sec) return null;
+        const secIdx = safeStep;
         const ro = vw === "viewVisit";
         const hasData = sec.customComponent
           ? (sec.customComponent === "forage_stock"
               ? (formData[`${sec.id}_stock`]?.length > 0 || sec.fields.some(f => !!formData[f.id]))
               : !!formData[`${sec.id}_${sec.customComponent.replace("cowscore_","").replace("ph_scoring","ph").replace("forage_stock","stock")}`])
           : sec.fields.some(f => !!formData[f.id]);
+
+        // Miniaturas de navegación (dots)
+        const dots = visibleSecs.map((s, i) => {
+          const hd = s.customComponent
+            ? (s.customComponent === "forage_stock"
+                ? (formData[`${s.id}_stock`]?.length > 0 || s.fields.some(f => !!formData[f.id]))
+                : !!formData[`${s.id}_${s.customComponent.replace("cowscore_","").replace("ph_scoring","ph").replace("forage_stock","stock")}`])
+            : s.fields.some(f => !!formData[f.id]);
+          return { idx: i, hd };
+        });
+
         return (
-          <Card key={sec.id} style={{ marginBottom: 12, borderLeft: `4px solid ${selCat.color}` }}>
-            <div onClick={() => toggleSection(sec.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: isExpanded ? 16 : 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 22, height: 22, borderRadius: "50%", background: hasData ? selCat.color : C.borderLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, fontWeight: 700, color: hasData ? "#fff" : C.textLight }}>{secIdx + 1}</div>
-                <div><h4 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{sec.title}</h4><p style={{ margin: "2px 0 0", fontSize: 13, color: C.textLight }}>{sec.subtitle}</p></div>
-              </div>
-              <span style={{ fontSize: 18, color: C.textLight, transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
+          <>
+            {/* Navegación mini por puntos */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+              {dots.map(d => (
+                <button key={d.idx} onClick={() => setWizardStep(d.idx)} title={visibleSecs[d.idx].title}
+                  style={{ width: d.idx === safeStep ? 28 : 10, height: 10, borderRadius: 99, border: "none", cursor: "pointer", padding: 0,
+                    background: d.idx === safeStep ? selCat.color : d.hd ? selCat.color + "60" : C.borderLight,
+                    transition: "all 0.2s", flexShrink: 0 }} />
+              ))}
+              <span style={{ fontSize: 12, color: C.textLight, marginLeft: 6 }}>{safeStep + 1} / {totalSteps}</span>
             </div>
-            {isExpanded && (
+
+            <Card style={{ marginBottom: 16, borderLeft: `4px solid ${selCat.color}`, minHeight: 200 }}>
+              {/* Cabecera de sección */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: hasData ? selCat.color : C.borderLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, fontWeight: 800, color: hasData ? "#fff" : C.textLight }}>
+                  {hasData ? "✓" : secIdx + 1}
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{sec.title}</h4>
+                  <p style={{ margin: "3px 0 0", fontSize: 13, color: C.textLight }}>{sec.subtitle}</p>
+                </div>
+              </div>
               <div style={{ display: "grid", gap: 14 }}>
                 {/* ── Comparación vs visita anterior (solo en modo nueva/editar) ── */}
                 {prevVisit && vw !== "viewVisit" && (() => {
@@ -4811,46 +4849,35 @@ const fetchVisits = async (clientId) => {
                   </div>
                 ))}
               </div>
-            )}
-          </Card>
+            </Card>
+
+            {/* Navegación Anterior / Siguiente */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, marginBottom: 40, gap: 12 }}>
+              <Btn variant="outline" onClick={() => setWizardStep(s => Math.max(0, s - 1))} disabled={safeStep === 0}>
+                ← Anterior
+              </Btn>
+
+              {vw === "viewVisit" ? (
+                safeStep < totalSteps - 1
+                  ? <Btn onClick={() => setWizardStep(s => s + 1)}>Siguiente →</Btn>
+                  : <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <Btn icon="download" onClick={() => downloadReport(selVisit, "html")} style={{ background: C.primary }}>Informe HTML</Btn>
+                      <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "txt")}>TXT</Btn>
+                      <Btn variant="outline" icon="edit" onClick={() => { setWizardStep(0); setVw("newVisit"); }}>Editar</Btn>
+                    </div>
+              ) : (
+                safeStep < totalSteps - 1
+                  ? <Btn onClick={() => setWizardStep(s => s + 1)}>Siguiente →</Btn>
+                  : <Btn icon="save" onClick={saveVisit} style={{ background: C.success }}>Guardar Visita ✓</Btn>
+              )}
+            </div>
+
+            {/* Score Global Preparto en último paso */}
+            {selCat?.id === "preparto" && safeStep === totalSteps - 1 && <PrepartoScoreCard data={formData} />}
+          </>
         );
-      })}
+      })()}
 
-      {vw !== "viewVisit" && <div style={{ display: "flex", gap: 10, marginTop: 20, marginBottom: 40 }}><Btn icon="save" size="lg" onClick={saveVisit}>Guardar Visita</Btn><Btn variant="outline" size="lg" onClick={() => setVw("clientDetail")}>Cancelar</Btn></div>}
-      {vw === "viewVisit" && (
-        <div style={{ display: "flex", gap: 10, marginTop: 20, marginBottom: 40, flexWrap: "wrap" }}>
-          <Btn icon="download" onClick={() => downloadReport(selVisit, "html")} style={{ background: C.primary }}>
-            Informe para Productor (HTML)
-          </Btn>
-          <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "txt")}>TXT</Btn>
-          <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "csv")}>CSV</Btn>
-          <Btn variant="outline" icon="edit" onClick={() => setVw("newVisit")}>Editar</Btn>
-        </div>
-      )}
-
-      {/* Score Global Preparto (solo en visitas de preparto) */}
-      {selCat?.id === "preparto" && (
-        <PrepartoScoreCard data={formData} />
-      )}
-
-      {/* Botón flotante de guardado rápido */}
-      {vw !== "viewVisit" && (
-        <div style={{ position: "fixed", bottom: 28, right: 28, zIndex: 200 }}>
-          <button
-            onClick={saveVisit}
-            style={{
-              width: 60, height: 60, borderRadius: "50%", border: "none", cursor: "pointer",
-              background: C.primary, color: "#fff", boxShadow: "0 4px 16px rgba(21,101,192,0.5)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 13, fontWeight: 700, fontFamily: ff,
-              transition: "transform 0.15s, box-shadow 0.15s",
-            }}
-            title="Guardar visita"
-          >
-            <Icon name="save" size={24} color="#fff" />
-          </button>
-        </div>
-      )}
     </div>
   );
 
