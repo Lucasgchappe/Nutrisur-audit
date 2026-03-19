@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
 
 
@@ -1663,11 +1663,14 @@ const GrainProcessing = ({ value = {}, onChange, readOnly }) => {
 // GENERIC FIELD RENDERER
 // ═══════════════════════════════════════════════════
 const Field = ({ field, value, onChange, readOnly }) => {
-  if (readOnly) {
+  if (readOnly || field.computed) {
     return (
-      <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, fontSize: 14, minHeight: 38, border: `1px solid ${C.borderLight}`, whiteSpace: "pre-wrap" }}>
-        {value || <span style={{ color: C.textLight, fontStyle: "italic" }}>— Sin dato —</span>}
-        {value && field.unit ? ` ${field.unit}` : ""}
+      <div style={{ padding: "8px 12px", background: field.computed ? `${C.primary}08` : C.inputBg, borderRadius: 8, fontSize: 14, minHeight: 38, border: `1px solid ${field.computed ? C.primary + "30" : C.borderLight}`, whiteSpace: "pre-wrap", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span>
+          {value != null && value !== "" ? <strong style={{ color: field.computed ? C.primary : C.text }}>{value}</strong> : <span style={{ color: C.textLight, fontStyle: "italic" }}>— Sin dato —</span>}
+          {value != null && value !== "" && field.unit ? ` ${field.unit}` : ""}
+        </span>
+        {field.computed && <span style={{ fontSize: 11, color: C.primary, fontWeight: 600, marginLeft: 8, flexShrink: 0 }}>⚡ calculado</span>}
       </div>
     );
   }
@@ -1698,8 +1701,8 @@ const PREPARTO_SECTIONS = [
     id: "cms", title: "b) Consumo de Materia Seca (CMS/DMI)", subtitle: "Oferta, rechazo y % de refusas",
     fields: [
       { id: "cms_oferta_kg", label: "Oferta (kg MS/vaca/día)", type: "number", placeholder: "Ej: 12.5", unit: "kg" },
-      { id: "cms_rechazo_kg", label: "Rechazo (kg MS/vaca/día)", type: "number", placeholder: "Ej: 1.5", unit: "kg" },
-      { id: "cms_refusas_pct", label: "% Refusas", type: "number", placeholder: "Ej: 8", unit: "%" },
+      { id: "cms_refusas_pct", label: "% Refusas (objetivo: 5–10%)", type: "number", placeholder: "Ej: 8", unit: "%" },
+      { id: "cms_rechazo_kg", label: "Rechazo estimado (kg MS/vaca/día)", computed: true, unit: "kg" },
       { id: "cms_observaciones", label: "Observaciones CMS", type: "textarea", placeholder: "Estado del alimento, frescura, etc." },
     ],
   },
@@ -1781,8 +1784,8 @@ const FRESCAS_SECTIONS = [
   { id: "fr_cetosis", title: "1. Cetosis subclínica", subtitle: "Monitoreo individual BHBA/acetoacetato — leche, sangre u orina", customComponent: "ketosis", fields: [] },
   { id: "fr_dmi", title: "2. DMI en frescas", subtitle: "Oferta-rechazo, variación día a día, % vacas que no comen", fields: [
     { id: "fr_dmi_oferta", label: "Oferta (kg MS/vaca/día)", type: "number", placeholder: "Ej: 22", unit: "kg" },
-    { id: "fr_dmi_rechazo", label: "Rechazo (kg MS/vaca/día)", type: "number", placeholder: "Ej: 2.0", unit: "kg" },
-    { id: "fr_dmi_refusas", label: "% Refusas", type: "number", placeholder: "Ej: 5", unit: "%" },
+    { id: "fr_dmi_refusas", label: "% Refusas (objetivo: 5–10%)", type: "number", placeholder: "Ej: 5", unit: "%" },
+    { id: "fr_dmi_rechazo", label: "Rechazo estimado (kg MS/vaca/día)", computed: true, unit: "kg" },
     { id: "fr_dmi_variacion", label: "Variación día a día en oferta", type: "select", options: ["Consistente (<5%)", "Moderada (5-10%)", "Alta (>10%)", "No evaluado"] },
     { id: "fr_dmi_no_comen", label: "% vacas que no comen (obs. comedero)", type: "number", placeholder: "Ej: 3", unit: "%" },
     { id: "fr_dmi_obs", label: "Observación de comedero (2h post-entrega, uniformidad, competencia)", type: "textarea", placeholder: "Estado a 2h post-entrega, uniformidad, competencia..." },
@@ -3430,6 +3433,7 @@ export default function DairyAuditApp() {
   const [prevVisit, setPrevVisit] = useState(null); // visita anterior para comparación
   const [draftBanner, setDraftBanner] = useState(false); // banner de borrador recuperable
   const [wizardStep, setWizardStep] = useState(0);       // paso actual del wizard de visita
+  const navRestoredRef = useRef(false);                  // evita restaurar más de una vez por sesión
 
   // Clave única de borrador por usuario/cliente/módulo
   const draftKey = user && selClient && selCat
@@ -3569,6 +3573,37 @@ const discardDraft = () => {
   setDraftBanner(false);
 };
 
+// ── Guardar estado de navegación en sessionStorage ──
+useEffect(() => {
+  if (!user || !vw || vw === "login") return;
+  try {
+    sessionStorage.setItem(`dairy_nav_${user.id}`, JSON.stringify({
+      vw: (vw === "newVisit" || vw === "viewVisit" || vw === "startVisit") ? "clientDetail" : vw,
+      clientId: selClient?.id || null,
+      catId: selCat?.id || null,
+      wizardStep,
+    }));
+  } catch (_) {}
+}, [vw, selClient, selCat, wizardStep, user]); // eslint-disable-line
+
+// ── Restaurar navegación al cargar clientes (primera vez) ──
+useEffect(() => {
+  if (!user || !clients.length || navRestoredRef.current) return;
+  navRestoredRef.current = true;
+  try {
+    const raw = sessionStorage.getItem(`dairy_nav_${user.id}`);
+    if (!raw) return;
+    const { vw: savedVw, clientId, catId, wizardStep: savedStep } = JSON.parse(raw);
+    if (!savedVw || savedVw === "dashboard") return;
+    const client = clientId ? clients.find(c => c.id === clientId) : null;
+    const cat = catId ? CATEGORIES.find(c => c.id === catId) : null;
+    if (client) setSelClient(client);
+    if (cat) setSelCat(cat);
+    if (typeof savedStep === "number") setWizardStep(savedStep);
+    setVw(savedVw);
+  } catch (_) {}
+}, [clients, user]); // eslint-disable-line
+
 const filteredClients = (clients || []).filter(c => {
   const q = (searchQ || "").toLowerCase();
   return (
@@ -3581,8 +3616,24 @@ const filteredClients = (clients || []).filter(c => {
   const flash = (t, type = "success") => { setMsg({ text: t, type }); setTimeout(() => setMsg(null), 3000); };
   const downloadReport = makeDownloadReport(selClient, flash);
 const handleFieldChange = (key, value) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-  };
+  setFormData((prev) => {
+    const next = { ...prev, [key]: value };
+    // Auto-calcular rechazo (kg) = oferta × refusas% / 100
+    const pairs = [
+      { oferta: "cms_oferta_kg", pct: "cms_refusas_pct", rechazo: "cms_rechazo_kg" },
+      { oferta: "fr_dmi_oferta", pct: "fr_dmi_refusas",  rechazo: "fr_dmi_rechazo" },
+    ];
+    for (const p of pairs) {
+      if (key === p.oferta || key === p.pct) {
+        const o = parseFloat(next[p.oferta]);
+        const r = parseFloat(next[p.pct]);
+        if (!isNaN(o) && !isNaN(r)) next[p.rechazo] = String(round(o * r / 100, 1));
+        else if (key === p.pct && isNaN(r)) next[p.rechazo] = "";
+      }
+    }
+    return next;
+  });
+};
   // Auth (Supabase)
 const handleLogin = async () => {
   if (!loginForm.username || !loginForm.password) return flash("Completá email y contraseña", "error");
