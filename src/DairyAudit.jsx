@@ -1155,7 +1155,7 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
 // ═══════════════════════════════════════════════════
 // pH SCORING COMPONENT — medición por vaca con semáforo
 // ═══════════════════════════════════════════════════
-const pHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => {
+const PHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => {
   const TARGET = [6.0, 6.8]; // pH de orina objetivo dieta aniónica
   const samples = value.samples || [];
 
@@ -4843,7 +4843,7 @@ const fetchVisits = async (clientId) => {
                   />
                 )}
                 {sec.customComponent === "ph_scoring" && (
-                  <pHScoring
+                  <PHScoring
                     value={formData[`${sec.id}_ph`] || { samples: [], obs: "" }}
                     onChange={val => handleFieldChange(`${sec.id}_ph`, val)}
                     readOnly={ro}
