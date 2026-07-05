@@ -3415,6 +3415,7 @@ export default function DairyAuditApp() {
   const [user, setUser] = useState(null);
   const [vw, setVw] = useState("login");
   const [clients, setClients] = useState([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false); // ya se hizo el primer fetch de clientes
   const [selClient, setSelClient] = useState(null);
   const [selCat, setSelCat] = useState(null);
   const [selVisit, setSelVisit] = useState(null);
@@ -3454,27 +3455,35 @@ export default function DairyAuditApp() {
 
 useEffect(() => {
   let alive = true;
+  let lastUserId; // undefined = todavía no procesamos ningún evento
 
-  supabase.auth.getSession().then(({ data, error }) => {
+  // Solo cambia la vista cuando el usuario REALMENTE cambia (login/logout).
+  // Eventos como TOKEN_REFRESHED o SIGNED_IN al volver a la pestaña NO deben
+  // sacar al usuario de donde estaba (bug: perdía el formulario al salir y entrar).
+  const applySession = (sessionUser) => {
     if (!alive) return;
-    if (error) console.error("getSession error:", error);
-
-    const sessionUser = data?.session?.user ?? null;
+    const newId = sessionUser?.id ?? null;
+    const changed = lastUserId !== newId;
+    lastUserId = newId;
     setUser(sessionUser);
     setLoading(false);
+    if (!changed) return;
+    if (sessionUser) {
+      setVw(v => (v === "login" ? "dashboard" : v));
+    } else {
+      navRestoredRef.current = false;
+      setVw("login");
+    }
+  };
 
-    if (sessionUser) setVw("dashboard");
-    else setVw("login");
+  supabase.auth.getSession().then(({ data, error }) => {
+    if (error) console.error("getSession error:", error);
+    applySession(data?.session?.user ?? null);
   });
 
   const { data: { subscription } } =
     supabase.auth.onAuthStateChange((_event, session) => {
-      const sessionUser = session?.user ?? null;
-      setUser(sessionUser);
-      setLoading(false);
-
-      if (sessionUser) setVw("dashboard"); // <- esto quizá lo ajustamos
-      else setVw("login");
+      applySession(session?.user ?? null);
     });
 
   return () => {
@@ -3494,6 +3503,7 @@ useEffect(() => {
 
     if (error) return flash(error.message, "error");
     setClients(data || []);
+    setClientsLoaded(true);
   })();
 }, [user]);
 
@@ -3530,10 +3540,8 @@ useEffect(() => {
 
 // ── Auto-save borrador mientras se llena la visita ──
 useEffect(() => {
-  if (vw !== "newVisit" || !draftKey || !selVisit) {
-    // Solo guardamos borradores en visitas NUEVAS (no edición)
-    if (vw !== "newVisit" || selVisit) return;
-  }
+  // Solo guardamos borradores en visitas NUEVAS (no edición)
+  if (vw !== "newVisit" || selVisit || !draftKey) return;
   if (Object.keys(formData).length <= 1) return; // solo tiene _fecha, no vale guardar
   const timer = setTimeout(() => {
     try {
@@ -3545,7 +3553,7 @@ useEffect(() => {
     } catch (_) {}
   }, 800);
   return () => clearTimeout(timer);
-}, [formData, vw]); // eslint-disable-line
+}, [formData, activeSections, vw, draftKey, selVisit]); // eslint-disable-line
 
 // ── Al entrar a newVisit (nueva), verificar si hay borrador ──
 useEffect(() => {
@@ -3573,36 +3581,97 @@ const discardDraft = () => {
   setDraftBanner(false);
 };
 
-// ── Guardar estado de navegación en sessionStorage ──
+// ── Auto-save del formulario de cliente (nuevo o edición) ──
+useEffect(() => {
+  if (vw !== "newClient" || !user) return;
+  const hasContent = Object.entries(clientForm).some(([k, v]) => k !== "id" && v);
+  if (!hasContent) return;
+  const timer = setTimeout(() => {
+    try {
+      localStorage.setItem(`dairy_clientform_${user.id}`, JSON.stringify(clientForm));
+    } catch (_) {}
+  }, 500);
+  return () => clearTimeout(timer);
+}, [clientForm, vw, user]); // eslint-disable-line
+
+// ── Guardar estado de navegación en localStorage ──
+// (localStorage y no sessionStorage: en el celular el navegador suele "matar"
+// la pestaña al cambiar de app, y sessionStorage se pierde con ella)
 useEffect(() => {
   if (!user || !vw || vw === "login") return;
   try {
-    sessionStorage.setItem(`dairy_nav_${user.id}`, JSON.stringify({
-      vw: (vw === "newVisit" || vw === "viewVisit" || vw === "startVisit") ? "clientDetail" : vw,
+    // viewVisit/startVisit y edición de visita existente vuelven a clientDetail;
+    // una visita NUEVA en curso se puede restaurar completa desde el borrador.
+    const navVw =
+      (vw === "viewVisit" || vw === "startVisit" || (vw === "newVisit" && selVisit))
+        ? "clientDetail"
+        : vw;
+    localStorage.setItem(`dairy_nav_${user.id}`, JSON.stringify({
+      vw: navVw,
       clientId: selClient?.id || null,
       catId: selCat?.id || null,
       wizardStep,
     }));
   } catch (_) {}
-}, [vw, selClient, selCat, wizardStep, user]); // eslint-disable-line
+}, [vw, selClient, selCat, selVisit, wizardStep, user]); // eslint-disable-line
 
 // ── Restaurar navegación al cargar clientes (primera vez) ──
 useEffect(() => {
-  if (!user || !clients.length || navRestoredRef.current) return;
+  if (!user || !clientsLoaded || navRestoredRef.current) return;
   navRestoredRef.current = true;
   try {
-    const raw = sessionStorage.getItem(`dairy_nav_${user.id}`);
+    const raw = localStorage.getItem(`dairy_nav_${user.id}`);
     if (!raw) return;
     const { vw: savedVw, clientId, catId, wizardStep: savedStep } = JSON.parse(raw);
     if (!savedVw || savedVw === "dashboard") return;
+
+    // Si estaba creando/editando un cliente, restaurar el formulario
+    if (savedVw === "newClient") {
+      try {
+        const rawCf = localStorage.getItem(`dairy_clientform_${user.id}`);
+        if (rawCf) {
+          const cf = JSON.parse(rawCf);
+          if (cf && typeof cf === "object") setClientForm(cf);
+        }
+      } catch (_) {}
+      setVw("newClient");
+      flash("Se restauraron los datos del cliente que estabas cargando");
+      return;
+    }
     const client = clientId ? clients.find(c => c.id === clientId) : null;
     const cat = catId ? CATEGORIES.find(c => c.id === catId) : null;
     if (client) setSelClient(client);
     if (cat) setSelCat(cat);
     if (typeof savedStep === "number") setWizardStep(savedStep);
+
+    // Si estaba cargando una visita nueva, restaurar el borrador directamente
+    if (savedVw === "newVisit") {
+      if (!client || !cat) return; // sin cliente/módulo no hay nada que restaurar
+      let draft = null;
+      try {
+        const rawDraft = localStorage.getItem(`dairy_draft_${user.id}_${client.id}_${cat.id}`);
+        if (rawDraft) draft = JSON.parse(rawDraft);
+      } catch (_) {}
+      if (draft?.formData) {
+        setSelVisit(null);
+        setFormData(draft.formData);
+        const acts = draft.activeSections || cat.sections.map(s => s.id);
+        setActiveSections(acts);
+        const exp = {};
+        acts.forEach(id => { exp[id] = true; });
+        setExpandedSections(exp);
+        setDraftBanner(false);
+        setVw("newVisit");
+        flash("Se restauró la visita que estabas cargando");
+      } else {
+        setVw("clientDetail");
+      }
+      return;
+    }
+
     setVw(savedVw);
   } catch (_) {}
-}, [clients, user]); // eslint-disable-line
+}, [clients, clientsLoaded, user]); // eslint-disable-line
 
 const filteredClients = (clients || []).filter(c => {
   const q = (searchQ || "").toLowerCase();
@@ -3635,15 +3704,26 @@ const handleFieldChange = (key, value) => {
   });
 };
   // Auth (Supabase)
+// Traduce errores de Supabase a mensajes útiles en español
+const friendlyAuthError = (error) => {
+  const m = error?.message || "";
+  if (/failed to fetch|network|fetch/i.test(m))
+    return "No se pudo conectar al servidor. Revisá tu conexión a internet. Si tenés internet y sigue fallando, es probable que el proyecto de Supabase esté pausado (los proyectos gratuitos se pausan tras ~1 semana sin uso): entrá a supabase.com y tocá \"Restore project\".";
+  if (/invalid login credentials/i.test(m)) return "Email o contraseña incorrectos";
+  if (/email not confirmed/i.test(m)) return "Tenés que confirmar tu email antes de entrar. Revisá tu casilla (y spam).";
+  if (/rate limit/i.test(m)) return "Demasiados intentos. Esperá un minuto y probá de nuevo.";
+  return m || "Error desconocido";
+};
+
 const handleLogin = async () => {
   if (!loginForm.username || !loginForm.password) return flash("Completá email y contraseña", "error");
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: loginForm.username,      // reutilizo tu campo username como email
+    email: loginForm.username.trim(),      // reutilizo tu campo username como email
     password: loginForm.password,
   });
 
-  if (error) return flash(error.message, "error");
+  if (error) return flash(friendlyAuthError(error), "error");
 
   // user lo setea también el onAuthStateChange, pero esto ayuda a que responda rápido
   setUser(data.user);
@@ -3655,14 +3735,14 @@ const handleRegister = async () => {
   if (!loginForm.username || !loginForm.password || !loginForm.nombre) return flash("Completá todos los campos", "error");
 
   const { data, error } = await supabase.auth.signUp({
-    email: loginForm.username,      // tu "username" ahora es email
+    email: loginForm.username.trim(),      // tu "username" ahora es email
     password: loginForm.password,
     options: {
       data: { nombre: loginForm.nombre }, // queda en user_metadata
     },
   });
 
-  if (error) return flash(error.message, "error");
+  if (error) return flash(friendlyAuthError(error), "error");
 
   // OJO: si tenés email confirmation habilitado, el user puede venir null hasta confirmar email
   flash("Cuenta creada. Revisá tu email si te pide confirmación.");
@@ -3673,8 +3753,10 @@ const handleRegister = async () => {
 };
 
 const handleLogout = async () => {
+  // Limpiar navegación guardada (los borradores de visitas se conservan)
+  if (user) { try { localStorage.removeItem(`dairy_nav_${user.id}`); } catch (_) {} }
   const { error } = await supabase.auth.signOut();
-  if (error) return flash(error.message, "error");
+  if (error) return flash(friendlyAuthError(error), "error");
   setUser(null);
   setVw("login");
 };
@@ -3712,7 +3794,7 @@ const handleClientLogin = async () => {
     const { data: clientData, error: ce } = await supabase
       .rpc("get_client_by_code", { p_code: code });
 
-    if (ce) return flash("Error de conexión: " + ce.message, "error");
+    if (ce) return flash(friendlyAuthError(ce), "error");
     if (!clientData || clientData.length === 0)
       return flash("Código inválido o no encontrado", "error");
 
@@ -3755,6 +3837,7 @@ const handlePortalLogout = () => {
     if (!clientForm.nombre || !clientForm.establecimiento)
       return flash("Nombre y establecimiento obligatorios", "error");
 
+    const isEdit = !!clientForm.id;
     const payload = {
       owner_id: user.id, // CLAVE para que pase RLS
       nombre: clientForm.nombre,
@@ -3763,13 +3846,22 @@ const handlePortalLogout = () => {
       provincia: clientForm.provincia || null,
       contacto: clientForm.contacto || null,
       email: clientForm.email || null,
+      sistema_productivo: clientForm.sistema_productivo || null,
     };
 
-    const { data, error } = await supabase
-      .from("clients")
-      .insert([payload])
-      .select()
-      .single();
+    const run = (p) =>
+      isEdit
+        ? supabase.from("clients").update(p).eq("id", clientForm.id).select().single()
+        : supabase.from("clients").insert([p]).select().single();
+
+    let { data, error } = await run(payload);
+
+    // Si la columna sistema_productivo todavía no existe en la base,
+    // reintentar sin ese campo (correr supabase_migration_clients.sql para habilitarla)
+    if (error && /sistema_productivo/i.test(error.message || "")) {
+      const { sistema_productivo: _sp, ...rest } = payload;
+      ({ data, error } = await run(rest));
+    }
 
     if (error) {
       console.error("saveClient error:", error);
@@ -3778,14 +3870,18 @@ const handlePortalLogout = () => {
 
     // actualizo el estado local para que se vea instantáneo
     setClients((prev) => {
-      const next = [...prev, data];
+      const next = isEdit
+        ? prev.map((c) => (c.id === data.id ? data : c))
+        : [...prev, data];
       next.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
       return next;
     });
+    if (selClient?.id === data.id) setSelClient(data);
 
-    flash("Cliente guardado");
+    flash(isEdit ? "Cliente actualizado" : "Cliente guardado");
+    try { localStorage.removeItem(`dairy_clientform_${user.id}`); } catch (_) {}
     setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "", sistema_productivo: "" });
-    setVw("clients");
+    setVw(isEdit ? "clientDetail" : "clients");
   } catch (e) {
     console.error(e);
     flash("Error inesperado guardando cliente", "error");
