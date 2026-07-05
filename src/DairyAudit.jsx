@@ -2172,7 +2172,7 @@ const VisitCompare = ({ visitA, visitB, category }) => {
 const VisitHistoryPanel = ({
   visits,
   onView, onEdit, onDelete,
-  onDownloadTxt, onDownloadCsv,
+  onDownloadTxt, onDownloadCsv, onDownloadPdf, onSharePdf,
 }) => {
   const [filterCat, setFilterCat] = useState("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -2377,6 +2377,8 @@ const VisitHistoryPanel = ({
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
                       <Btn variant="outline" size="sm" icon="eye" onClick={() => onView(v, cat)}>Ver</Btn>
                       <Btn variant="ghost" size="sm" icon="edit" onClick={() => onEdit(v, cat)} />
+                      {onDownloadPdf && <Btn variant="ghost" size="sm" onClick={() => onDownloadPdf(v)} title="Descargar informe PDF" style={{ fontWeight: 700 }}>PDF</Btn>}
+                      {onSharePdf && <Btn variant="ghost" size="sm" onClick={() => onSharePdf(v)} title="Compartir informe por WhatsApp" style={{ color: "#25D366", fontWeight: 700 }}>WA</Btn>}
                       <Btn variant="ghost" size="sm" icon="download" onClick={() => onDownloadTxt(v)} title="Descargar TXT" />
                       {prevVisit && (
                         <Btn
@@ -2871,10 +2873,36 @@ const generateHTMLReport = (visit, client, category) => {
 </html>`;
 };
 
-const makeDownloadReport = (currentClient, flashFn) => (visit, type) => {
-    const cat = CATEGORIES.find(c => c.id === visit.categoryId);
+const makeDownloadReport = (currentClient, flashFn, allVisits = []) => async (visit, type) => {
+    const cat = CATEGORIES.find(c => c.id === (visit.categoryId || visit.category_id));
     if (!cat || !currentClient) return flashFn("Error: falta info de categoría o cliente", "error");
     const name = `NutriSur_${currentClient.nombre}_${cat.name}_${visit.fecha || "sin-fecha"}`.replace(/\s+/g, "_");
+
+    if (type === "pdf" || type === "wa") {
+      // Visita anterior del mismo módulo (para mostrar comparación en el PDF)
+      const prevVisit = allVisits
+        .filter(v => v.id !== visit.id
+          && (v.categoryId || v.category_id) === cat.id
+          && (v.fecha || "") < (visit.fecha || ""))
+        .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))[0] || null;
+      const globalScore = cat.id === "preparto" ? (calcPrepartoScore(visit.data)?.totalScore ?? null) : null;
+      try {
+        const mod = await import("./lib/pdfReport.js");
+        const args = { visit, client: currentClient, category: cat, prevVisit, globalScore };
+        if (type === "pdf") {
+          mod.downloadVisitPdf(args);
+          flashFn("PDF generado");
+        } else {
+          const res = await mod.shareVisitPdfWhatsApp(args);
+          if (res === "downloaded") flashFn("PDF descargado — adjuntalo en WhatsApp Web");
+        }
+      } catch (e) {
+        console.error("PDF error:", e);
+        flashFn("Error generando el PDF", "error");
+      }
+      return;
+    }
+
     if (type === "txt") {
       downloadFile(generateTextReport(visit, currentClient, cat), `${name}.txt`, "text/plain;charset=utf-8");
     } else if (type === "html") {
@@ -3683,7 +3711,7 @@ const filteredClients = (clients || []).filter(c => {
   );
 });
   const flash = (t, type = "success") => { setMsg({ text: t, type }); setTimeout(() => setMsg(null), 3000); };
-  const downloadReport = makeDownloadReport(selClient, flash);
+  const downloadReport = makeDownloadReport(selClient, flash, visits);
 const handleFieldChange = (key, value) => {
   setFormData((prev) => {
     const next = { ...prev, [key]: value };
@@ -4630,6 +4658,8 @@ const fetchVisits = async (clientId) => {
           setVw("newVisit");
         }}
         onDelete={(v) => deleteVisit(v)}
+        onDownloadPdf={(v) => downloadReport(v, "pdf")}
+        onSharePdf={(v) => downloadReport(v, "wa")}
         onDownloadTxt={(v) => downloadReport(v, "txt")}
         onDownloadCsv={(v) => downloadReport(v, "csv")}
       />
@@ -5008,7 +5038,9 @@ const fetchVisits = async (clientId) => {
                 safeStep < totalSteps - 1
                   ? <Btn onClick={() => setWizardStep(s => s + 1)}>Siguiente →</Btn>
                   : <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <Btn icon="download" onClick={() => downloadReport(selVisit, "html")} style={{ background: C.primary }}>Informe HTML</Btn>
+                      <Btn icon="download" onClick={() => downloadReport(selVisit, "pdf")} style={{ background: C.primary }}>Informe PDF</Btn>
+                      <Btn onClick={() => downloadReport(selVisit, "wa")} style={{ background: "#25D366" }}>Enviar por WhatsApp</Btn>
+                      <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "html")}>HTML</Btn>
                       <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "txt")}>TXT</Btn>
                       <Btn variant="outline" icon="edit" onClick={() => { setWizardStep(0); setVw("newVisit"); }}>Editar</Btn>
                     </div>
