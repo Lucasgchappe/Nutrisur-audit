@@ -3988,7 +3988,7 @@ useEffect(() => {
     // viewVisit/startVisit y edición de visita existente vuelven a clientDetail;
     // una visita NUEVA en curso se puede restaurar completa desde el borrador.
     const navVw =
-      (vw === "viewVisit" || vw === "startVisit" || (vw === "newVisit" && selVisit))
+      (vw === "viewVisit" || vw === "startVisit" || vw === "briefing" || (vw === "newVisit" && selVisit))
         ? "clientDetail"
         : vw;
     localStorage.setItem(`dairy_nav_${user.id}`, JSON.stringify({
@@ -4232,6 +4232,7 @@ const handlePortalLogout = () => {
       contacto: clientForm.contacto || null,
       email: clientForm.email || null,
       sistema_productivo: clientForm.sistema_productivo || null,
+      frecuencia_dias: clientForm.frecuencia_dias ? parseInt(clientForm.frecuencia_dias) : null,
     };
 
     const run = (p) =>
@@ -4241,11 +4242,13 @@ const handlePortalLogout = () => {
 
     let { data, error } = await run(payload);
 
-    // Si la columna sistema_productivo todavía no existe en la base,
-    // reintentar sin ese campo (correr supabase_migration_clients.sql para habilitarla)
-    if (error && /sistema_productivo/i.test(error.message || "")) {
-      const { sistema_productivo: _sp, ...rest } = payload;
-      ({ data, error } = await run(rest));
+    // Si alguna columna nueva no existe aún en la base, reintentar sin ella
+    // (correr supabase_migration_clients.sql y supabase_migration_frecuencia.sql para habilitarlas)
+    for (const col of ["sistema_productivo", "frecuencia_dias"]) {
+      if (error && new RegExp(col, "i").test(error.message || "")) {
+        delete payload[col];
+        ({ data, error } = await run(payload));
+      }
     }
 
     if (error) {
@@ -4328,6 +4331,28 @@ const saveVisit = async () => {
   setFormData({});
   setSelVisit(null);
   setVw("clientDetail");
+};
+
+// Iniciar una visita nueva de un módulo (desde detalle de cliente o briefing)
+const startNewVisit = (cat) => {
+  setSelCat(cat);
+  setSelVisit(null);
+  setActiveSections(cat.sections.map(s => s.id)); // todas activas por defecto
+  // Cargar visita anterior del mismo módulo para este cliente
+  const clientVisits = visits.filter(v => selClient && v.client_id === selClient.id && (v.categoryId || v.category_id) === cat.id);
+  const sorted = [...clientVisits].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  const prev = sorted[0] || null;
+  setPrevVisit(prev);
+  // Sembrar la revisión del plan de acción de la visita anterior
+  const prevPlan = prev?.data?.plan_accion || [];
+  setDraftSavedAt(null);
+  setFormData({
+    _fecha: today(),
+    ...(prevPlan.length ? {
+      plan_revision: prevPlan.map(it => ({ texto: it.texto, prioridad: it.prioridad || "media", estado: "pendiente" })),
+    } : {}),
+  });
+  setVw("startVisit");
 };
 
 const deleteVisit = async (v) => {
@@ -4536,7 +4561,7 @@ const Toast = msg && (
   // ── LAYOUT ──
   const navItems = [
     { id: "dashboard", label: "Inicio", icon: "home", views: ["dashboard"] },
-    { id: "clients", label: "Clientes", icon: "users", views: ["clients","clientDetail","newClient","newVisit","viewVisit","startVisit"] },
+    { id: "clients", label: "Clientes", icon: "users", views: ["clients","clientDetail","newClient","newVisit","viewVisit","startVisit","briefing"] },
     { id: "informes", label: "Informes", icon: "chart", views: ["informes"] },
   ];
   const Header = (
@@ -4647,6 +4672,47 @@ const Toast = msg && (
         </div>
       </div>
 
+      {/* ── Agenda: próximas visitas ── */}
+      {(() => {
+        if (!allVisitsCache.length || !clients.length) return null;
+        const hoy = new Date();
+        const rows = clients.map(c => {
+          const fechas = allVisitsCache.filter(v => v.client_id === c.id).map(v => v.fecha).filter(Boolean).sort();
+          const last = fechas[fechas.length - 1] || null;
+          if (!last) return null;
+          const freq = parseInt(c.frecuencia_dias) || 45;
+          const diasDesde = Math.floor((hoy - new Date(last)) / 86400000);
+          const diasRestantes = freq - diasDesde;
+          return { c, last, freq, diasDesde, diasRestantes };
+        }).filter(Boolean).sort((a, b) => a.diasRestantes - b.diasRestantes).slice(0, 8);
+
+        if (!rows.length) return null;
+        return (
+          <div style={{ marginBottom: 36 }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>📅 Próximas visitas</h3>
+            <div style={{ display: "grid", gap: 8 }}>
+              {rows.map(({ c, last, freq, diasRestantes }) => {
+                const vencida = diasRestantes < 0;
+                const pronto = diasRestantes >= 0 && diasRestantes <= 7;
+                const col = vencida ? C.danger : pronto ? C.warning : C.textLight;
+                return (
+                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, borderRadius: 12, border: `1px solid ${C.borderLight}`, borderLeft: `4px solid ${col}`, padding: "12px 16px", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 160, flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{c.nombre}</div>
+                      <div style={{ fontSize: 12, color: C.textLight }}>{c.establecimiento} · última: {fmt(last)} · cada {freq} días</div>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: col, flexShrink: 0 }}>
+                      {vencida ? `vencida hace ${-diasRestantes} día${-diasRestantes !== 1 ? "s" : ""}` : diasRestantes === 0 ? "hoy" : `en ${diasRestantes} día${diasRestantes !== 1 ? "s" : ""}`}
+                    </span>
+                    <Btn size="sm" onClick={() => { setSelClient(c); setVw("briefing"); }} style={{ background: C.success, flexShrink: 0 }}>🧭 Preparar</Btn>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Requiere atención ── */}
       {(() => {
         if (!allVisitsCache.length || !clients.length) return null;
@@ -4661,7 +4727,8 @@ const Toast = msg && (
           // Días sin visita
           const lastFecha = cVisits.map(v => v.fecha).filter(Boolean).sort().pop();
           const dias = lastFecha ? Math.floor((hoy - new Date(lastFecha)) / 86400000) : null;
-          if (dias !== null && dias > 45) items.push({ txt: `Sin visita hace ${dias} días`, color: C.warning });
+          const freqAlerta = parseInt(c.frecuencia_dias) || 45;
+          if (dias !== null && dias > freqAlerta) items.push({ txt: `Sin visita hace ${dias} días (acordado: cada ${freqAlerta})`, color: C.warning });
 
           // Última visita por módulo
           const ultimaPorCat = {};
@@ -4895,6 +4962,18 @@ const Toast = msg && (
             </select>
             <p style={{ fontSize: 12, color: C.textLight, margin: "4px 0 0" }}>Permite contextualizar los parámetros evaluados en cada visita.</p>
           </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Frecuencia de visitas acordada</label>
+            <select value={clientForm.frecuencia_dias || ""} onChange={e => setClientForm({ ...clientForm, frecuencia_dias: e.target.value ? parseInt(e.target.value) : null })} style={inputStyle}>
+              <option value="">— Sin definir (se asume 45 días) —</option>
+              <option value="15">Cada 15 días</option>
+              <option value="30">Mensual (cada 30 días)</option>
+              <option value="45">Cada 45 días</option>
+              <option value="60">Cada 60 días</option>
+              <option value="90">Trimestral (cada 90 días)</option>
+            </select>
+            <p style={{ fontSize: 12, color: C.textLight, margin: "4px 0 0" }}>Se usa para la agenda de próximas visitas en el inicio.</p>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.borderLight}` }}>
           <Btn icon="save" onClick={saveClient}>Guardar cliente</Btn>
@@ -4950,7 +5029,7 @@ const fetchVisits = async (clientId) => {
             {selClient.sistema_productivo && <p style={{ fontSize: 13, color: C.primary, margin: "4px 0 0", fontWeight: 600 }}>🌾 {selClient.sistema_productivo}</p>}
             {selClient.contacto && <p style={{ fontSize: 13, color: C.textLight, margin: "4px 0 0" }}>📞 {selClient.contacto}</p>}
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Btn size="sm" onClick={() => { setInfoClient(selClient.id); setInfoTab("ficha"); setVw("informes"); }} style={{ background: C.primary }}>📊 Ficha del tambo</Btn><Btn variant="outline" icon="edit" size="sm" onClick={() => { setClientForm(selClient); setVw("newClient"); }}>Editar</Btn><Btn variant="danger" icon="trash" size="sm" onClick={() => deleteClient(selClient)}>Eliminar</Btn></div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Btn size="sm" onClick={() => setVw("briefing")} style={{ background: C.success }}>🧭 Preparar visita</Btn><Btn size="sm" onClick={() => { setInfoClient(selClient.id); setInfoTab("ficha"); setVw("informes"); }} style={{ background: C.primary }}>📊 Ficha del tambo</Btn><Btn variant="outline" icon="edit" size="sm" onClick={() => { setClientForm(selClient); setVw("newClient"); }}>Editar</Btn><Btn variant="danger" icon="trash" size="sm" onClick={() => deleteClient(selClient)}>Eliminar</Btn></div>
         </div>
       </Card>
 
@@ -5049,26 +5128,7 @@ const fetchVisits = async (clientId) => {
       <h3 style={{ margin: "0 0 12px", fontSize: 18 }}>Nueva visita</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 32 }}>
         {CATEGORIES.map(cat => (
-          <Card key={cat.id} onClick={() => {
-            setSelCat(cat);
-            setSelVisit(null);
-            setActiveSections(cat.sections.map(s => s.id)); // todas activas por defecto
-            // Cargar visita anterior del mismo módulo para este cliente
-            const clientVisits = visits.filter(v => selClient && v.client_id === selClient.id && (v.categoryId || v.category_id) === cat.id);
-            const sorted = [...clientVisits].sort((a, b) => b.fecha.localeCompare(a.fecha));
-            const prev = sorted[0] || null;
-            setPrevVisit(prev);
-            // Sembrar la revisión del plan de acción de la visita anterior
-            const prevPlan = prev?.data?.plan_accion || [];
-            setDraftSavedAt(null);
-            setFormData({
-              _fecha: today(),
-              ...(prevPlan.length ? {
-                plan_revision: prevPlan.map(it => ({ texto: it.texto, prioridad: it.prioridad || "media", estado: "pendiente" })),
-              } : {}),
-            });
-            setVw("startVisit");
-          }} style={{ borderLeft: `4px solid ${cat.color}`, cursor: "pointer" }}>
+          <Card key={cat.id} onClick={() => startNewVisit(cat)} style={{ borderLeft: `4px solid ${cat.color}`, cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 40, height: 40, borderRadius: 8, background: cat.color + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={cat.icon} color={cat.color} /></div>
               <div>
@@ -5539,6 +5599,129 @@ const fetchVisits = async (clientId) => {
     </div>
   );
 
+  // ── BRIEFING PRE-VISITA ──
+  const Briefing = selClient && (() => {
+    const hoy = new Date();
+    const fechas = visits.map(v => v.fecha).filter(Boolean).sort();
+    const lastFecha = fechas[fechas.length - 1] || null;
+    const diasDesde = lastFecha ? Math.floor((hoy - new Date(lastFecha)) / 86400000) : null;
+    const freq = parseInt(selClient.frecuencia_dias) || 45;
+    const atrasado = diasDesde !== null && diasDesde > freq;
+
+    // Última visita por módulo
+    const ultimaPorCat = {};
+    visits.forEach(v => {
+      const k = v.categoryId || v.category_id;
+      if (!ultimaPorCat[k] || (v.fecha || "") > (ultimaPorCat[k].fecha || "")) ultimaPorCat[k] = v;
+    });
+
+    // Métricas fuera de rango en la última visita de cada módulo
+    const rojos = [];
+    METRICS.forEach(m => {
+      const v = ultimaPorCat[m.cat];
+      if (!v || !m.ref) return;
+      const val = m.extract(v);
+      if (val === null || isNaN(val)) return;
+      if (val < m.ref[0] || val > m.ref[1]) rojos.push({ m, val, fecha: v.fecha });
+    });
+
+    // Recomendaciones abiertas y pendientes arrastradas
+    const abiertos = [];
+    Object.entries(ultimaPorCat).forEach(([catId, v]) => {
+      const cat = CATEGORIES.find(c => c.id === catId);
+      (v.data?.plan_accion || []).forEach(it => abiertos.push({ texto: it.texto, prioridad: it.prioridad, plazo: it.plazo, cat, tipo: "recomendación" }));
+      (v.data?.plan_revision || []).filter(it => it.estado === "pendiente").forEach(it => abiertos.push({ texto: it.texto, prioridad: it.prioridad, cat, tipo: "pendiente anterior" }));
+    });
+    const orden = { alta: 0, media: 1, baja: 2 };
+    abiertos.sort((a, b) => (orden[a.prioridad] ?? 1) - (orden[b.prioridad] ?? 1));
+
+    // Módulos ordenados por antigüedad (los que hace más que no se revisan, primero)
+    const modulos = CATEGORIES.map(cat => {
+      const v = ultimaPorCat[cat.id];
+      const dias = v ? Math.floor((hoy - new Date(v.fecha)) / 86400000) : null;
+      return { cat, dias, fecha: v?.fecha || null };
+    }).sort((a, b) => (b.dias ?? 99999) - (a.dias ?? 99999));
+
+    return (
+      <div style={{ padding: "24px 32px", maxWidth: 900, margin: "0 auto", width: "100%" }}>
+        <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clientDetail")} style={{ marginBottom: 16 }}>Volver</Btn>
+        <h2 style={{ fontFamily: ffSerif, fontSize: 26, margin: "0 0 4px", fontWeight: 700 }}>🧭 Preparar visita</h2>
+        <p style={{ color: C.textLight, margin: "0 0 20px", fontSize: 15 }}>{selClient.nombre} — {selClient.establecimiento}{selClient.localidad ? ` · ${selClient.localidad}` : ""}</p>
+
+        {/* Estado general */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+          <div style={{ background: C.card, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "12px 18px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, textTransform: "uppercase" }}>Última visita</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: atrasado ? C.danger : C.text }}>{lastFecha ? `hace ${diasDesde} días` : "nunca"}</div>
+            {lastFecha && <div style={{ fontSize: 11, color: C.textLight }}>{fmt(lastFecha)}</div>}
+          </div>
+          <div style={{ background: C.card, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "12px 18px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, textTransform: "uppercase" }}>Frecuencia acordada</div>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>cada {freq} días</div>
+            {atrasado && <div style={{ fontSize: 11, color: C.danger, fontWeight: 700 }}>⚠ atrasada {diasDesde - freq} días</div>}
+          </div>
+          <div style={{ background: C.card, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "12px 18px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, textTransform: "uppercase" }}>Para revisar hoy</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: abiertos.length || rojos.length ? C.warning : C.success }}>{abiertos.length + rojos.length} punto{abiertos.length + rojos.length !== 1 ? "s" : ""}</div>
+          </div>
+        </div>
+
+        {/* Pendientes del plan */}
+        {abiertos.length > 0 && (
+          <Card style={{ marginBottom: 16, borderLeft: `4px solid ${C.warning}` }}>
+            <h4 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>📋 Recomendaciones a revisar en el tambo</h4>
+            <div style={{ display: "grid", gap: 8 }}>
+              {abiertos.map((it, i) => {
+                const pr = PRIORIDADES[it.prioridad] || PRIORIDADES.media;
+                return (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", background: C.inputBg, borderRadius: 8, padding: "10px 12px" }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: "#fff", background: pr.color, borderRadius: 6, padding: "2px 8px", flexShrink: 0, marginTop: 1 }}>{pr.label}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14 }}>{it.texto}</div>
+                      <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>{it.cat?.name || ""} · {it.tipo}{it.plazo ? ` · plazo: ${it.plazo}` : ""}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
+        {/* Métricas en rojo */}
+        {rojos.length > 0 && (
+          <Card style={{ marginBottom: 16, borderLeft: `4px solid ${C.danger}` }}>
+            <h4 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>🔴 Fuera de rango en la última visita</h4>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {rojos.map((r, i) => (
+                <span key={i} style={{ fontSize: 13, fontWeight: 600, padding: "6px 12px", borderRadius: 99, background: C.danger + "10", color: C.danger, border: `1px solid ${C.danger}30` }}>
+                  {r.m.label}: {r.val}{r.m.unit} <span style={{ fontWeight: 400, opacity: 0.8 }}>(obj. {r.m.ref[0]}–{r.m.ref[1]})</span>
+                </span>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Módulos por antigüedad */}
+        <Card style={{ marginBottom: 16 }}>
+          <h4 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>📂 Módulos — tocá para comenzar la visita</h4>
+          <div style={{ display: "grid", gap: 8 }}>
+            {modulos.map(({ cat, dias, fecha }) => (
+              <div key={cat.id} onClick={() => startNewVisit(cat)}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.borderLight}`, borderLeft: `4px solid ${cat.color}`, cursor: "pointer", background: C.card }}>
+                <Icon name={cat.icon} color={cat.color} size={20} />
+                <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{cat.name}</div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: dias === null ? C.textLight : dias > freq ? C.danger : C.textLight }}>
+                  {dias === null ? "sin visitas" : `hace ${dias} días (${fmt(fecha)})`}
+                </span>
+                <span style={{ color: cat.color, fontSize: 18 }}>›</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  })();
+
   // ── INFORMES ── (componente externo, ver debajo de DairyAuditApp)
   const InformesView = (
     <InformesPanel
@@ -5695,7 +5878,7 @@ const fetchVisits = async (clientId) => {
   // ── Si está en portal de cliente, renderizar portal ──
   if (vw === "clientPortal" && portalClient) return ClientPortal;
 
-  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
+  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView, briefing: Briefing };
 
 return (
   <div style={{ fontFamily: ff, minHeight: "100vh", background: C.bg, color: C.text }}>
