@@ -3005,7 +3005,11 @@ const makeDownloadReport = (currentClient, flashFn, allVisits = []) => async (vi
         }
       } catch (e) {
         console.error("PDF error:", e);
-        flashFn("Error generando el PDF", "error");
+        // Import dinámico fallido = hay una versión nueva deployada y esta pestaña quedó vieja
+        const msg = /import|fetch|module|chunk/i.test(e?.message || "")
+          ? "Hay una versión nueva de la app: recargá la página (Ctrl+Shift+R) y volvé a intentar"
+          : "Error generando el PDF: " + (e?.message || "desconocido");
+        flashFn(msg, "error");
       }
       return;
     }
