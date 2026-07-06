@@ -172,6 +172,79 @@ const deltaInfo = (curr, prevData, fieldId, unit) => {
 };
 
 // ───────────────────────────────────────────────────
+// KPIs para el resumen ejecutivo (con semáforo)
+// ───────────────────────────────────────────────────
+function collectKpis(d, category) {
+  const kpis = [];
+  const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+
+  category.sections.forEach(sec => {
+    // Scores por vaca
+    if (sec.customComponent?.startsWith("cowscore_")) {
+      const type = sec.customComponent.replace("cowscore_", "");
+      const cfg = SCORE_TARGETS[type];
+      const cows = d[`${sec.id}_cowscore`]?.cows || [];
+      const scores = cows.map(c => parseFloat(c.score)).filter(v => !isNaN(v));
+      if (scores.length && cfg) {
+        const a = round(avg(scores), 2);
+        kpis.push({
+          label: cfg.nombre,
+          value: `${a}  (objetivo ${cfg.target[0]}–${cfg.target[1]}, n=${scores.length})`,
+          color: trafficColor(a, cfg.target),
+        });
+      }
+    }
+    // Cetosis
+    if (sec.customComponent === "ketosis") {
+      const cows = d[`${sec.id}_ketosis`]?.cows || [];
+      if (cows.length) {
+        const prev = round(cows.filter(c => c.positivo).length / cows.length * 100, 1);
+        kpis.push({
+          label: "Prevalencia de cetosis",
+          value: `${prev}%  (n=${cows.length}, alerta >15%)`,
+          color: prev <= 15 ? COL.success : prev <= 25 ? COL.warning : COL.danger,
+        });
+      }
+    }
+    // Reserva forrajera mínima
+    if (sec.customComponent === "ingredients" || sec.customComponent === "forage_stock") {
+      const stock = d[`${sec.id}_stock`] || [];
+      const dias = stock.map(l => {
+        const sTC = parseFloat(l.stock_kg_tc) || 0;
+        const consumo = parseFloat(l.consumo_kg_tc) || 0;
+        const vacas = parseFloat(l.vacas) || 1;
+        return consumo > 0 ? Math.floor(sTC / (consumo * vacas)) : null;
+      }).filter(v => v !== null);
+      if (dias.length) {
+        const min = Math.min(...dias);
+        const worst = stock.find((l, i) => dias[i] === min);
+        kpis.push({
+          label: "Reserva forrajera mínima",
+          value: `${min} días${worst?.name ? ` (${worst.name})` : ""}`,
+          color: min > 30 ? COL.success : min >= 15 ? COL.warning : COL.danger,
+        });
+      }
+    }
+  });
+
+  // pH de orina (preparto)
+  const phSamples = d.ph_ph?.samples || [];
+  if (phSamples.length) {
+    const vals = phSamples.map(s => parseFloat(s.ph)).filter(v => !isNaN(v));
+    if (vals.length) {
+      const a = round(avg(vals), 2);
+      kpis.push({
+        label: "pH de orina promedio",
+        value: `${a}  (objetivo 6.0–7.0, n=${vals.length})`,
+        color: a >= 6.0 && a <= 7.0 ? COL.success : a >= 5.8 ? COL.warning : COL.danger,
+      });
+    }
+  }
+
+  return kpis;
+}
+
+// ───────────────────────────────────────────────────
 // Generador principal
 // ───────────────────────────────────────────────────
 export function buildVisitPdf({ visit, client, category, prevVisit, globalScore }) {
@@ -227,6 +300,79 @@ export function buildVisitPdf({ visit, client, category, prevVisit, globalScore 
   if (prevVisit) {
     R.setFont(8, "italic", COL.textLight);
     doc.text(`Comparado con la visita anterior del ${fmt(prevVisit.fecha)}.`, R.M, R.y + 2);
+    R.y += 6;
+  }
+
+  // ═══════════════════════════════════════════════
+  // RESUMEN EJECUTIVO
+  // ═══════════════════════════════════════════════
+  const kpis = collectKpis(d, category);
+  const plan = Array.isArray(d.plan_accion) ? d.plan_accion : [];
+  const revision = Array.isArray(d.plan_revision) ? d.plan_revision : [];
+  const hallazgoKey = ["hallazgos_principales", "fr_hallazgos", "cama_hallazgos", "ali_hallazgos", "ec_hallazgos"].find(k => d[k]);
+
+  if (kpis.length || plan.length || revision.length || hallazgoKey) {
+    R.gap(2);
+    R.sectionHeader("Resumen ejecutivo", null, "#1A4FBA");
+
+    // Indicadores clave con semáforo
+    if (kpis.length) {
+      kpis.forEach(k => R.kv(k.label, k.value, { dotColor: k.color, delta: k.delta ? { txt: k.delta, color: COL.textLight } : null }));
+      R.gap(2);
+    }
+
+    // Hallazgos principales
+    if (hallazgoKey) R.para("Hallazgos principales", d[hallazgoKey]);
+
+    // Seguimiento del plan anterior
+    if (revision.length) {
+      const counts = { cumplida: 0, parcial: 0, pendiente: 0 };
+      revision.forEach(it => { counts[it.estado] = (counts[it.estado] || 0) + 1; });
+      R.ensure(7);
+      R.setFont(9.5, "bold", COL.primaryDark);
+      doc.text("Seguimiento del plan anterior", R.M, R.y + 3.5); R.y += 6;
+      R.kv("Cumplimiento", `${counts.cumplida} cumplidas · ${counts.parcial} parciales · ${counts.pendiente} pendientes`, {
+        dotColor: counts.pendiente === 0 ? COL.success : counts.cumplida + counts.parcial >= counts.pendiente ? COL.warning : COL.danger,
+      });
+      const estadoCol = { cumplida: COL.success, parcial: COL.warning, pendiente: COL.danger };
+      const estadoTxt = { cumplida: "CUMPLIDA", parcial: "PARCIAL", pendiente: "PENDIENTE" };
+      revision.forEach(it => {
+        const lines = doc.splitTextToSize(it.texto || "", R.bodyW - 30);
+        R.ensure(lines.length * 4 + 2.5);
+        R.setFont(8, "bold", estadoCol[it.estado] || COL.textLight);
+        doc.text(estadoTxt[it.estado] || "—", R.M + 2, R.y + 3.2);
+        R.setFont(8.5, "normal");
+        doc.text(lines, R.M + 26, R.y + 3.2);
+        R.y += lines.length * 4 + 1.5;
+      });
+      R.gap(2);
+    }
+
+    // Plan de acción de esta visita
+    if (plan.length) {
+      R.ensure(7);
+      R.setFont(9.5, "bold", COL.primaryDark);
+      doc.text("Plan de acción", R.M, R.y + 3.5); R.y += 6;
+      const prCol = { alta: COL.danger, media: COL.warning, baja: COL.success };
+      const prTxt = { alta: "ALTA", media: "MEDIA", baja: "BAJA" };
+      const orden = { alta: 0, media: 1, baja: 2 };
+      [...plan].sort((a, b) => (orden[a.prioridad] ?? 1) - (orden[b.prioridad] ?? 1)).forEach((it, i) => {
+        const txt = `${i + 1}. ${it.texto || ""}${it.plazo ? `  (plazo: ${it.plazo})` : ""}`;
+        const lines = doc.splitTextToSize(txt, R.bodyW - 20);
+        R.ensure(lines.length * 4 + 2.5);
+        R.setFont(8, "bold", prCol[it.prioridad] || COL.warning);
+        doc.text(prTxt[it.prioridad] || "MEDIA", R.M + 2, R.y + 3.2);
+        R.setFont(8.5, "normal");
+        doc.text(lines, R.M + 16, R.y + 3.2);
+        R.y += lines.length * 4 + 1.5;
+      });
+    }
+
+    R.gap(2);
+    R.hr();
+    R.setFont(8, "italic", COL.textLight);
+    R.ensure(5);
+    doc.text("Detalle completo de la visita a continuación.", R.M, R.y + 2.5);
     R.y += 6;
   }
 

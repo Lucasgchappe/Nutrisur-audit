@@ -3436,6 +3436,136 @@ function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, inf
 }
 
 // ═══════════════════════════════════════════════════
+// PLAN DE ACCIÓN — recomendaciones con seguimiento
+// ═══════════════════════════════════════════════════
+const PRIORIDADES = {
+  alta:  { label: "Alta",  color: "#C42B2B" },
+  media: { label: "Media", color: "#CC8A00" },
+  baja:  { label: "Baja",  color: "#0D7D47" },
+};
+
+function PlanAccionPanel({ value = [], onChange, readOnly, color }) {
+  const [texto, setTexto] = useState("");
+  const [prioridad, setPrioridad] = useState("media");
+  const [plazo, setPlazo] = useState("");
+
+  const add = () => {
+    const t = texto.trim();
+    if (!t) return;
+    onChange([...(value || []), { id: Date.now().toString(36), texto: t, prioridad, plazo: plazo.trim() }]);
+    setTexto(""); setPlazo(""); setPrioridad("media");
+  };
+  const remove = (id) => onChange((value || []).filter(it => it.id !== id));
+
+  if (readOnly && !(value || []).length) return null;
+
+  return (
+    <Card style={{ marginBottom: 16, borderLeft: `4px solid ${color || C.primary}` }}>
+      <h4 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>📋 Plan de acción</h4>
+      <p style={{ margin: "0 0 14px", fontSize: 13, color: C.textLight }}>
+        Recomendaciones para el establecimiento. Van al informe y en la próxima visita se marca si se cumplieron.
+      </p>
+
+      {(value || []).length > 0 && (
+        <div style={{ display: "grid", gap: 8, marginBottom: readOnly ? 0 : 14 }}>
+          {value.map((it, i) => {
+            const pr = PRIORIDADES[it.prioridad] || PRIORIDADES.media;
+            return (
+              <div key={it.id || i} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: C.inputBg, borderRadius: 8, padding: "10px 12px", border: `1px solid ${C.borderLight}` }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: "#fff", background: pr.color, borderRadius: 6, padding: "2px 8px", flexShrink: 0, marginTop: 1 }}>{pr.label}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>{it.texto}</div>
+                  {it.plazo && <div style={{ fontSize: 12, color: C.textLight, marginTop: 2 }}>⏱ Plazo: {it.plazo}</div>}
+                </div>
+                {!readOnly && (
+                  <button onClick={() => remove(it.id)} title="Eliminar"
+                    style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 16, padding: "0 4px", flexShrink: 0 }}>×</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!readOnly && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <textarea
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            placeholder="Ej: Aumentar espacio de comedero a 76 cm/vaca corriendo el alambrado del callejón"
+            style={{ ...inputStyle, minHeight: 52, resize: "vertical" }}
+          />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <select value={prioridad} onChange={e => setPrioridad(e.target.value)} style={{ ...inputStyle, width: "auto", cursor: "pointer" }}>
+              <option value="alta">🔴 Prioridad alta</option>
+              <option value="media">🟡 Prioridad media</option>
+              <option value="baja">🟢 Prioridad baja</option>
+            </select>
+            <input type="text" value={plazo} onChange={e => setPlazo(e.target.value)} placeholder="Plazo (ej: antes de la próxima visita)" style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
+            <Btn icon="plus" size="sm" onClick={add} disabled={!texto.trim()}>Agregar</Btn>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function PlanRevisionPanel({ value = [], onChange, readOnly, prevFecha }) {
+  const ESTADOS = [
+    { id: "cumplida",  label: "✔ Cumplida",  color: C.success },
+    { id: "parcial",   label: "◐ Parcial",   color: C.warning },
+    { id: "pendiente", label: "✗ Pendiente", color: C.danger },
+  ];
+  if (!(value || []).length) return null;
+  const counts = { cumplida: 0, parcial: 0, pendiente: 0 };
+  value.forEach(it => { counts[it.estado] = (counts[it.estado] || 0) + 1; });
+
+  const setEstado = (idx, estado) => {
+    if (readOnly) return;
+    onChange(value.map((it, i) => (i === idx ? { ...it, estado } : it)));
+  };
+
+  return (
+    <Card style={{ marginBottom: 16, borderLeft: `4px solid ${C.accent}` }}>
+      <h4 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>🔄 Seguimiento del plan anterior{prevFecha ? ` (${fmt(prevFecha)})` : ""}</h4>
+      <p style={{ margin: "0 0 14px", fontSize: 13, color: C.textLight }}>
+        ¿Qué se implementó de lo recomendado en la visita pasada? {counts.cumplida} cumplidas · {counts.parcial} parciales · {counts.pendiente} pendientes.
+      </p>
+      <div style={{ display: "grid", gap: 8 }}>
+        {value.map((it, i) => {
+          const pr = PRIORIDADES[it.prioridad] || PRIORIDADES.media;
+          return (
+            <div key={i} style={{ background: C.inputBg, borderRadius: 8, padding: "10px 12px", border: `1px solid ${C.borderLight}` }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: pr.color, flexShrink: 0, marginTop: 2 }}>●</span>
+                <div style={{ flex: 1, fontSize: 14 }}>{it.texto}</div>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {ESTADOS.map(es => {
+                  const active = it.estado === es.id;
+                  return (
+                    <button key={es.id} onClick={() => setEstado(i, es.id)} disabled={readOnly}
+                      style={{
+                        fontSize: 12, fontWeight: 700, fontFamily: ff, padding: "4px 12px", borderRadius: 99,
+                        cursor: readOnly ? "default" : "pointer",
+                        border: `1.5px solid ${active ? es.color : C.borderLight}`,
+                        background: active ? es.color : "transparent",
+                        color: active ? "#fff" : C.textLight,
+                      }}>
+                      {es.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════
 export default function DairyAuditApp() {
@@ -3570,7 +3700,11 @@ useEffect(() => {
 useEffect(() => {
   // Solo guardamos borradores en visitas NUEVAS (no edición)
   if (vw !== "newVisit" || selVisit || !draftKey) return;
-  if (Object.keys(formData).length <= 1) return; // solo tiene _fecha, no vale guardar
+  // No guardar si solo tiene la fecha y la revisión de plan sin tocar (todo pendiente)
+  const draftKeys = Object.keys(formData).filter(k => k !== "_fecha");
+  const onlySeed = draftKeys.length === 1 && draftKeys[0] === "plan_revision"
+    && (formData.plan_revision || []).every(it => it.estado === "pendiente");
+  if (!draftKeys.length || onlySeed) return;
   const timer = setTimeout(() => {
     try {
       localStorage.setItem(draftKey, JSON.stringify({
@@ -4615,13 +4749,21 @@ const fetchVisits = async (clientId) => {
         {CATEGORIES.map(cat => (
           <Card key={cat.id} onClick={() => {
             setSelCat(cat);
-            setFormData({ _fecha: today() });
             setSelVisit(null);
             setActiveSections(cat.sections.map(s => s.id)); // todas activas por defecto
             // Cargar visita anterior del mismo módulo para este cliente
             const clientVisits = visits.filter(v => selClient && v.client_id === selClient.id && (v.categoryId || v.category_id) === cat.id);
             const sorted = [...clientVisits].sort((a, b) => b.fecha.localeCompare(a.fecha));
-            setPrevVisit(sorted[0] || null);
+            const prev = sorted[0] || null;
+            setPrevVisit(prev);
+            // Sembrar la revisión del plan de acción de la visita anterior
+            const prevPlan = prev?.data?.plan_accion || [];
+            setFormData({
+              _fecha: today(),
+              ...(prevPlan.length ? {
+                plan_revision: prevPlan.map(it => ({ texto: it.texto, prioridad: it.prioridad || "media", estado: "pendiente" })),
+              } : {}),
+            });
             setVw("startVisit");
           }} style={{ borderLeft: `4px solid ${cat.color}`, cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -5050,6 +5192,26 @@ const fetchVisits = async (clientId) => {
                   : <Btn icon="save" onClick={saveVisit} style={{ background: C.success }}>Guardar Visita ✓</Btn>
               )}
             </div>
+
+            {/* Plan de acción y seguimiento en último paso */}
+            {safeStep === totalSteps - 1 && (
+              <>
+                {(formData.plan_revision?.length > 0) && (
+                  <PlanRevisionPanel
+                    value={formData.plan_revision}
+                    onChange={val => handleFieldChange("plan_revision", val)}
+                    readOnly={vw === "viewVisit"}
+                    prevFecha={prevVisit?.fecha}
+                  />
+                )}
+                <PlanAccionPanel
+                  value={formData.plan_accion || []}
+                  onChange={val => handleFieldChange("plan_accion", val)}
+                  readOnly={vw === "viewVisit"}
+                  color={selCat.color}
+                />
+              </>
+            )}
 
             {/* Score Global Preparto en último paso */}
             {selCat?.id === "preparto" && safeStep === totalSteps - 1 && <PrepartoScoreCard data={formData} />}
