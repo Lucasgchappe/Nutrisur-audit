@@ -1013,10 +1013,29 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
   const cfg = configs[scoreType];
   const cows = value.cows || [];
 
-  const addCow = () => {
-    const nextNum = cows.length + 1;
-    onChange({ ...value, cows: [...cows, { id: uid(), num: nextNum, caravana: "", score: "", nota: "" }] });
+  const addCow = (count = 1) => {
+    const nuevos = Array.from({ length: count }, (_, i) => ({ id: uid() + "_" + i, num: cows.length + i + 1, caravana: "", score: "", nota: "" }));
+    onChange({ ...value, cows: [...cows, ...nuevos] });
   };
+
+  // Carga rápida: un toque agrega una vaca con ese score (caravana opcional después)
+  const quickAdd = (score) => {
+    onChange({ ...value, cows: [...cows, { id: uid(), num: cows.length + 1, caravana: "", score: String(score), nota: "" }] });
+  };
+
+  const undoLast = () => {
+    if (!cows.length) return;
+    onChange({ ...value, cows: cows.slice(0, -1) });
+  };
+
+  // Valores del rango práctico para los botones de carga rápida
+  const quickValues = (() => {
+    const lo = scoreType === "bcs" ? 2.0 : cfg.min;
+    const hi = scoreType === "bcs" ? 4.5 : cfg.max;
+    const vals = [];
+    for (let v = lo; v <= hi + 1e-9; v += cfg.step) vals.push(round(v, 2));
+    return vals;
+  })();
 
   const updateCow = (id, field, val) => {
     onChange({ ...value, cows: cows.map(c => c.id === id ? { ...c, [field]: val } : c) });
@@ -1134,10 +1153,49 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
       )}
 
       {!readOnly && (
-        <div style={{ display: "flex", gap: 8 }}>
-          <Btn variant="outline" size="sm" icon="plus" onClick={addCow}>Agregar vaca</Btn>
-          <Btn variant="ghost" size="sm" onClick={() => { for (let i = 0; i < 5; i++) addCow(); }}>+5 vacas</Btn>
-        </div>
+        <>
+          {/* ── Carga rápida: un toque = una vaca con ese score ── */}
+          <div style={{ background: C.bg, border: `1.5px dashed ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.textLight, textTransform: "uppercase", letterSpacing: 0.5 }}>⚡ Carga rápida — tocá el score y se agrega la vaca</span>
+              {cows.length > 0 && (
+                <button onClick={undoLast} style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: ff, padding: 0 }}>
+                  ↩ Deshacer última
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {quickValues.map(v => {
+                const inTarget = v >= cfg.target[0] && v <= cfg.target[1];
+                const count = scores.filter(s => s === v).length;
+                return (
+                  <button key={v} onClick={() => quickAdd(v)}
+                    style={{
+                      position: "relative", minWidth: 52, padding: "10px 6px", borderRadius: 10,
+                      border: `2px solid ${inTarget ? C.success : C.border}`,
+                      background: inTarget ? C.success + "10" : C.card,
+                      color: inTarget ? C.success : C.text,
+                      fontSize: 15, fontWeight: 800, fontFamily: ff, cursor: "pointer",
+                    }}>
+                    {v}
+                    {count > 0 && (
+                      <span style={{ position: "absolute", top: -7, right: -7, background: C.primary, color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 11, color: C.textLight, margin: "8px 0 0", fontStyle: "italic" }}>
+              La caravana es opcional: completala en la tabla solo para las vacas que quieras identificar (ej. las problema).
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="outline" size="sm" icon="plus" onClick={() => addCow(1)}>Agregar vaca vacía</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => addCow(5)}>+5 vacas</Btn>
+          </div>
+        </>
       )}
 
       {/* Observations */}
@@ -3104,9 +3162,30 @@ const METRICS = [
 const CLIENT_COLORS = ["#1565C0","#E76F51","#2D9CDB","#27AE60","#9B51E0","#F2994A","#EB5757","#0F766E"];
 
 // ═══════════════════════════════════════════════════
+// SPARKLINE — mini gráfico de tendencia
+// ═══════════════════════════════════════════════════
+const Sparkline = ({ pts, color = C.primary, refRange }) => {
+  if (!pts || pts.length < 2) return <div style={{ height: 40, display: "flex", alignItems: "center", fontSize: 11, color: C.textLight }}>{pts?.length === 1 ? "1 solo dato" : "sin datos"}</div>;
+  const w = 150, h = 40, p = 4;
+  const vals = pts.map(x => x.val);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (refRange) { lo = Math.min(lo, refRange[0]); hi = Math.max(hi, refRange[1]); }
+  const rng = hi - lo || 1;
+  const X = (i) => p + i * (w - 2 * p) / (pts.length - 1);
+  const Y = (v) => h - p - ((v - lo) / rng) * (h - 2 * p);
+  return (
+    <svg width={w} height={h} style={{ display: "block" }}>
+      {refRange && <rect x={p} y={Y(refRange[1])} width={w - 2 * p} height={Math.max(1, Y(refRange[0]) - Y(refRange[1]))} fill={C.success} opacity={0.13} rx={2} />}
+      <polyline points={pts.map((x, i) => `${X(i)},${Y(x.val)}`).join(" ")} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={X(pts.length - 1)} cy={Y(vals[vals.length - 1])} r="3.5" fill={color} />
+    </svg>
+  );
+};
+
+// ═══════════════════════════════════════════════════
 // INFORMES PANEL (componente externo — sin hooks condicionales)
 // ═══════════════════════════════════════════════════
-function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, infoMetric, setInfoMetric }) {
+function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, infoMetric, setInfoMetric, infoTab, setInfoTab }) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [tab, setTab] = useState("evolucion"); // evolucion | resumen | comparacion
@@ -3174,6 +3253,97 @@ function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, inf
     transition: "all 0.18s",
   });
 
+  // Toggle de modo: por indicador vs ficha del tambo
+  const ModeToggle = (
+    <div style={{ display: "flex", gap: 4, background: C.borderLight, borderRadius: 10, padding: 4, width: "fit-content", marginBottom: 20 }}>
+      <button style={selStyle(infoTab !== "ficha")} onClick={() => setInfoTab("indicador")}>📈 Por indicador</button>
+      <button style={selStyle(infoTab === "ficha")} onClick={() => setInfoTab("ficha")}>🐄 Ficha del tambo</button>
+    </div>
+  );
+
+  // ═══ MODO FICHA DEL TAMBO ═══
+  if (infoTab === "ficha") {
+    const fichaId = infoClient !== "all" ? infoClient : (clients[0]?.id || null);
+    const fichaClientObj = clients.find(c => c.id === fichaId);
+    const cards = METRICS.map(m => {
+      const series = allVisitsCache
+        .filter(v => v.client_id === fichaId && (v.categoryId || v.category_id) === m.cat)
+        .map(v => ({ fecha: v.fecha, val: m.extract(v) }))
+        .filter(p => p.val !== null && !isNaN(p.val))
+        .sort((a, b) => (a.fecha || "").localeCompare(b.fecha || ""));
+      return { m, series };
+    }).filter(c => c.series.length > 0);
+
+    // Última visita registrada del cliente
+    const lastFecha = allVisitsCache.filter(v => v.client_id === fichaId).map(v => v.fecha).sort().pop();
+
+    return (
+      <div style={{ padding: "28px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{ fontFamily: ffSerif, fontSize: 28, margin: 0, color: C.text }}>Informes y Análisis</h2>
+          <p style={{ color: C.textLight, marginTop: 4, fontSize: 14 }}>Todos los indicadores del tambo en una sola pantalla</p>
+        </div>
+        {ModeToggle}
+
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 20 }}>
+          <div style={{ minWidth: 240 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textLight, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Tambo</label>
+            <select value={fichaId || ""} onChange={e => setInfoClient(e.target.value)} style={{ ...inputStyle, fontSize: 13, fontWeight: 500 }}>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.nombre} — {c.establecimiento}</option>)}
+            </select>
+          </div>
+          {lastFecha && <span style={{ fontSize: 13, color: C.textLight, paddingBottom: 10 }}>Última visita: <b>{fmt(lastFecha)}</b></span>}
+        </div>
+
+        {!fichaClientObj ? (
+          <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, textAlign: "center", padding: "56px 24px" }}>
+            <p style={{ color: C.textLight }}>Todavía no hay clientes cargados.</p>
+          </div>
+        ) : cards.length === 0 ? (
+          <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, textAlign: "center", padding: "56px 24px" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🐄</div>
+            <p style={{ color: C.text, fontSize: 16, fontWeight: 600, margin: "0 0 6px" }}>Sin indicadores todavía</p>
+            <p style={{ color: C.textLight, fontSize: 14, margin: 0 }}>Cargá visitas para este tambo y acá vas a ver su evolución completa.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+            {cards.map(({ m, series }) => {
+              const last = series[series.length - 1];
+              const prev = series.length > 1 ? series[series.length - 2] : null;
+              const inRef = m.ref ? (last.val >= m.ref[0] && last.val <= m.ref[1]) : null;
+              const statusColor = inRef === null ? C.primary : inRef ? C.success : C.danger;
+              const delta = prev ? round(last.val - prev.val, 2) : null;
+              return (
+                <div key={m.id} style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, borderLeft: `4px solid ${statusColor}`, padding: "16px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.textLight, textTransform: "uppercase", letterSpacing: 0.4 }}>{m.label}</div>
+                      <div style={{ fontSize: 28, fontWeight: 800, color: statusColor, marginTop: 4, lineHeight: 1 }}>
+                        {last.val}<span style={{ fontSize: 13, fontWeight: 600, opacity: 0.7 }}> {m.unit}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.textLight, marginTop: 5 }}>
+                        {fmt(last.fecha)}
+                        {delta !== null && delta !== 0 && (
+                          <span style={{ fontWeight: 700, marginLeft: 6, color: C.textLight }}>
+                            {delta > 0 ? "↑" : "↓"} {delta > 0 ? "+" : ""}{delta} vs. ant.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <Sparkline pts={series} color={statusColor} refRange={m.ref} />
+                      {m.ref && <div style={{ fontSize: 10, color: C.textLight, marginTop: 3 }}>objetivo {m.ref[0]}–{m.ref[1]} {m.unit}</div>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
       {/* Encabezado */}
@@ -3181,6 +3351,7 @@ function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, inf
         <h2 style={{ fontFamily: ffSerif, fontSize: 28, margin: 0, color: C.text }}>Informes y Análisis</h2>
         <p style={{ color: C.textLight, marginTop: 4, fontSize: 14 }}>Seguimiento de indicadores técnicos por visita, cliente y período</p>
       </div>
+      {ModeToggle}
 
       {/* Filtros */}
       <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, padding: "18px 20px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
@@ -3586,6 +3757,7 @@ export default function DairyAuditApp() {
   const [expandedSections, setExpandedSections] = useState({});
   const [infoClient, setInfoClient] = useState("all");
   const [infoMetric, setInfoMetric] = useState("bcs");
+  const [infoTab, setInfoTab] = useState("indicador"); // "indicador" | "ficha"
   const [allVisitsCache, setAllVisitsCache] = useState([]);
   const [activeSections, setActiveSections] = useState(null); // null = todas activas
   const [clientTemplate, setClientTemplate] = useState(null); // plantilla guardada del cliente
@@ -3683,7 +3855,7 @@ useEffect(() => {
 }, [user, selClient, vw]);
 
 useEffect(() => {
-  if (vw !== "informes" || !user) return;
+  if ((vw !== "informes" && vw !== "dashboard") || !user) return;
   (async () => {
     const { data, error } = await supabase
       .from("visits").select("*")
@@ -4423,6 +4595,84 @@ const Toast = msg && (
         </div>
       </div>
 
+      {/* ── Requiere atención ── */}
+      {(() => {
+        if (!allVisitsCache.length || !clients.length) return null;
+        const hoy = new Date();
+        const porCliente = [];
+
+        clients.forEach(c => {
+          const cVisits = allVisitsCache.filter(v => v.client_id === c.id);
+          if (!cVisits.length) return;
+          const items = [];
+
+          // Días sin visita
+          const lastFecha = cVisits.map(v => v.fecha).filter(Boolean).sort().pop();
+          const dias = lastFecha ? Math.floor((hoy - new Date(lastFecha)) / 86400000) : null;
+          if (dias !== null && dias > 45) items.push({ txt: `Sin visita hace ${dias} días`, color: C.warning });
+
+          // Última visita por módulo
+          const ultimaPorCat = {};
+          cVisits.forEach(v => {
+            const k = v.categoryId || v.category_id;
+            if (!ultimaPorCat[k] || (v.fecha || "") > (ultimaPorCat[k].fecha || "")) ultimaPorCat[k] = v;
+          });
+
+          // Métricas fuera de rango en la última visita de cada módulo
+          METRICS.forEach(m => {
+            const v = ultimaPorCat[m.cat];
+            if (!v || !m.ref) return;
+            const val = m.extract(v);
+            if (val === null || isNaN(val)) return;
+            if (val < m.ref[0] || val > m.ref[1]) {
+              items.push({ txt: `${m.label}: ${val}${m.unit} (obj. ${m.ref[0]}–${m.ref[1]})`, color: C.danger });
+            }
+          });
+
+          // Recomendaciones abiertas y pendientes arrastradas
+          let abiertas = 0, pendientes = 0;
+          Object.values(ultimaPorCat).forEach(v => {
+            abiertas += (v.data?.plan_accion || []).length;
+            pendientes += (v.data?.plan_revision || []).filter(it => it.estado === "pendiente").length;
+          });
+          if (abiertas > 0) items.push({ txt: `${abiertas} recomendación${abiertas > 1 ? "es" : ""} en curso`, color: C.primary });
+          if (pendientes > 0) items.push({ txt: `${pendientes} pendiente${pendientes > 1 ? "s" : ""} de visitas anteriores`, color: C.warning });
+
+          if (items.length) porCliente.push({ client: c, items });
+        });
+
+        if (!porCliente.length) return (
+          <div style={{ background: C.success + "10", border: `1px solid ${C.success}30`, borderRadius: 12, padding: "12px 18px", marginBottom: 36, fontSize: 14, color: C.success, fontWeight: 600 }}>
+            ✓ Todo en orden: sin indicadores fuera de rango ni visitas atrasadas.
+          </div>
+        );
+
+        return (
+          <div style={{ marginBottom: 36 }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>⚠️ Requiere atención</h3>
+            <div style={{ display: "grid", gap: 10 }}>
+              {porCliente.map(({ client, items }) => (
+                <Card key={client.id} onClick={() => { setSelClient(client); setVw("clientDetail"); }}
+                  style={{ cursor: "pointer", borderLeft: `4px solid ${items.some(i => i.color === C.danger) ? C.danger : C.warning}` }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, minWidth: 150 }}>{client.nombre}<div style={{ fontSize: 12, color: C.textLight, fontWeight: 500 }}>{client.establecimiento}</div></div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}>
+                      {items.slice(0, 6).map((it, i) => (
+                        <span key={i} style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 99, background: it.color + "12", color: it.color, border: `1px solid ${it.color}30` }}>
+                          {it.txt}
+                        </span>
+                      ))}
+                      {items.length > 6 && <span style={{ fontSize: 12, color: C.textLight, padding: "3px 6px" }}>+{items.length - 6} más</span>}
+                    </div>
+                    <span style={{ color: C.textLight, fontSize: 18, alignSelf: "center" }}>›</span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Acciones rápidas */}
       <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>Acciones rápidas</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14, marginBottom: 36 }}>
@@ -4648,7 +4898,7 @@ const fetchVisits = async (clientId) => {
             {selClient.sistema_productivo && <p style={{ fontSize: 13, color: C.primary, margin: "4px 0 0", fontWeight: 600 }}>🌾 {selClient.sistema_productivo}</p>}
             {selClient.contacto && <p style={{ fontSize: 13, color: C.textLight, margin: "4px 0 0" }}>📞 {selClient.contacto}</p>}
           </div>
-          <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" icon="edit" size="sm" onClick={() => { setClientForm(selClient); setVw("newClient"); }}>Editar</Btn><Btn variant="danger" icon="trash" size="sm" onClick={() => deleteClient(selClient)}>Eliminar</Btn></div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Btn size="sm" onClick={() => { setInfoClient(selClient.id); setInfoTab("ficha"); setVw("informes"); }} style={{ background: C.primary }}>📊 Ficha del tambo</Btn><Btn variant="outline" icon="edit" size="sm" onClick={() => { setClientForm(selClient); setVw("newClient"); }}>Editar</Btn><Btn variant="danger" icon="trash" size="sm" onClick={() => deleteClient(selClient)}>Eliminar</Btn></div>
         </div>
       </Card>
 
@@ -5231,6 +5481,8 @@ const fetchVisits = async (clientId) => {
       setInfoClient={setInfoClient}
       infoMetric={infoMetric}
       setInfoMetric={setInfoMetric}
+      infoTab={infoTab}
+      setInfoTab={setInfoTab}
     />
   );
 
