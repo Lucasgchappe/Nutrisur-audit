@@ -1732,12 +1732,61 @@ const Field = ({ field, value, onChange, readOnly }) => {
       </div>
     );
   }
-  const common = { ...inputStyle };
-  if (field.type === "textarea") return <textarea style={{ ...common, minHeight: (field.rows || 3) * 28, resize: "vertical" }} placeholder={field.placeholder} value={value || ""} onChange={e => onChange(field.id, e.target.value)} />;
-  if (field.type === "select") return (<select style={{ ...common, cursor: "pointer" }} value={value || ""} onChange={e => onChange(field.id, e.target.value)}><option value="">— Seleccionar —</option>{field.options.map(o => <option key={o} value={o}>{o}</option>)}</select>);
+  // Táctil: inputs altos y fuente 16px (evita el auto-zoom de iOS/Android al enfocar)
+  const common = { ...inputStyle, padding: "13px 14px", fontSize: 16, minHeight: 48 };
+
+  if (field.type === "textarea") return <textarea style={{ ...common, minHeight: (field.rows || 3) * 30, resize: "vertical" }} placeholder={field.placeholder} value={value || ""} onChange={e => onChange(field.id, e.target.value)} />;
+
+  if (field.type === "select") {
+    const opts = field.options || [];
+    // Pocas opciones → chips de un toque (tablet); listas largas → select clásico
+    if (opts.length <= 5) {
+      return (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {opts.map(o => {
+            const active = value === o;
+            return (
+              <button key={o} type="button" onClick={() => onChange(field.id, active ? "" : o)}
+                style={{
+                  padding: "12px 16px", borderRadius: 10, fontSize: 14, fontWeight: 600, fontFamily: ff, minHeight: 48,
+                  border: `2px solid ${active ? C.primary : C.border}`,
+                  background: active ? C.primary : C.card, color: active ? "#fff" : C.text,
+                  cursor: "pointer", transition: "all 0.15s",
+                }}>
+                {o}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+    return (<select style={{ ...common, cursor: "pointer" }} value={value || ""} onChange={e => onChange(field.id, e.target.value)}><option value="">— Seleccionar —</option>{opts.map(o => <option key={o} value={o}>{o}</option>)}</select>);
+  }
+
+  if (field.type === "number") {
+    // Stepper − / + : carga sin abrir el teclado en pantalla
+    const step = parseFloat(field.step) || 1;
+    const bump = (dir) => {
+      const curr = parseFloat(value);
+      const next = round((isNaN(curr) ? 0 : curr) + dir * step, 3);
+      onChange(field.id, next < 0 ? "0" : String(next));
+    };
+    const btnS = { width: 48, minHeight: 48, borderRadius: 10, border: `2px solid ${C.border}`, background: C.card, fontSize: 22, fontWeight: 800, color: C.primary, cursor: "pointer", flexShrink: 0, fontFamily: ff };
+    return (
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+        <button type="button" style={btnS} onClick={() => bump(-1)}>−</button>
+        <div style={{ position: "relative", flex: 1 }}>
+          <input type="number" step={field.step} inputMode="decimal" style={{ ...common, paddingRight: field.unit ? 46 : 14, textAlign: "center", fontWeight: 700 }} placeholder={field.placeholder} value={value || ""} onChange={e => onChange(field.id, e.target.value)} />
+          {field.unit && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: C.textLight, fontWeight: 500 }}>{field.unit}</span>}
+        </div>
+        <button type="button" style={btnS} onClick={() => bump(1)}>+</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "relative" }}>
-      <input type={field.type || "text"} step={field.step} style={{ ...common, paddingRight: field.unit ? 42 : 12 }} placeholder={field.placeholder} value={value || ""} onChange={e => onChange(field.id, e.target.value)} />
+      <input type={field.type || "text"} style={{ ...common, paddingRight: field.unit ? 46 : 14 }} placeholder={field.placeholder} value={value || ""} onChange={e => onChange(field.id, e.target.value)} />
       {field.unit && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: C.textLight, fontWeight: 500 }}>{field.unit}</span>}
     </div>
   );
@@ -3763,6 +3812,7 @@ export default function DairyAuditApp() {
   const [clientTemplate, setClientTemplate] = useState(null); // plantilla guardada del cliente
   const [prevVisit, setPrevVisit] = useState(null); // visita anterior para comparación
   const [draftBanner, setDraftBanner] = useState(false); // banner de borrador recuperable
+  const [draftSavedAt, setDraftSavedAt] = useState(null); // hora del último auto-guardado (indicador visible)
   const [wizardStep, setWizardStep] = useState(0);       // paso actual del wizard de visita
   const navRestoredRef = useRef(false);                  // evita restaurar más de una vez por sesión
 
@@ -3884,6 +3934,7 @@ useEffect(() => {
         activeSections,
         savedAt: new Date().toISOString(),
       }));
+      setDraftSavedAt(new Date().toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit" }));
     } catch (_) {}
   }, 800);
   return () => clearTimeout(timer);
@@ -4273,6 +4324,7 @@ const saveVisit = async () => {
   // Limpiar borrador de localStorage
   if (draftKey) { try { localStorage.removeItem(draftKey); } catch (_) {} }
   setDraftBanner(false);
+  setDraftSavedAt(null);
   setFormData({});
   setSelVisit(null);
   setVw("clientDetail");
@@ -5008,6 +5060,7 @@ const fetchVisits = async (clientId) => {
             setPrevVisit(prev);
             // Sembrar la revisión del plan de acción de la visita anterior
             const prevPlan = prev?.data?.plan_accion || [];
+            setDraftSavedAt(null);
             setFormData({
               _fecha: today(),
               ...(prevPlan.length ? {
@@ -5199,7 +5252,12 @@ const fetchVisits = async (clientId) => {
         return (
           <div style={{ marginBottom: 16, background: C.card, borderRadius: 10, padding: "12px 16px", border: `1px solid ${C.borderLight}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Progreso de la visita</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                Progreso de la visita
+                {draftSavedAt && vw === "newVisit" && !selVisit && (
+                  <span style={{ color: C.success, fontWeight: 700, marginLeft: 10, fontSize: 12 }}>✓ borrador guardado {draftSavedAt}</span>
+                )}
+              </span>
               <span style={{ fontSize: 13, fontWeight: 700, color: barColor }}>{filledCount} / {visibleSections.length} secciones con datos</span>
             </div>
             <div style={{ height: 8, background: C.borderLight, borderRadius: 99, overflow: "hidden" }}>
@@ -5424,16 +5482,21 @@ const fetchVisits = async (clientId) => {
               </div>
             </Card>
 
-            {/* Navegación Anterior / Siguiente */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, marginBottom: 40, gap: 12 }}>
-              <Btn variant="outline" onClick={() => setWizardStep(s => Math.max(0, s - 1))} disabled={safeStep === 0}>
+            {/* Navegación Anterior / Siguiente — fija abajo (tablet friendly) */}
+            <div style={{
+              position: "sticky", bottom: 0, zIndex: 30,
+              background: "rgba(240,245,251,0.96)", backdropFilter: "blur(6px)",
+              borderTop: `1px solid ${C.borderLight}`, margin: "8px -8px 24px", padding: "12px 8px",
+              display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+            }}>
+              <Btn variant="outline" onClick={() => { setWizardStep(s => Math.max(0, s - 1)); window.scrollTo({ top: 0 }); }} disabled={safeStep === 0} style={{ padding: "13px 22px", fontSize: 15 }}>
                 ← Anterior
               </Btn>
 
               {vw === "viewVisit" ? (
                 safeStep < totalSteps - 1
-                  ? <Btn onClick={() => setWizardStep(s => s + 1)}>Siguiente →</Btn>
-                  : <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  ? <Btn onClick={() => { setWizardStep(s => s + 1); window.scrollTo({ top: 0 }); }} style={{ padding: "13px 22px", fontSize: 15 }}>Siguiente →</Btn>
+                  : <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       <Btn icon="download" onClick={() => downloadReport(selVisit, "pdf")} style={{ background: C.primary }}>Informe PDF</Btn>
                       <Btn onClick={() => downloadReport(selVisit, "wa")} style={{ background: "#25D366" }}>Enviar por WhatsApp</Btn>
                       <Btn variant="outline" icon="download" onClick={() => downloadReport(selVisit, "html")}>HTML</Btn>
@@ -5442,8 +5505,8 @@ const fetchVisits = async (clientId) => {
                     </div>
               ) : (
                 safeStep < totalSteps - 1
-                  ? <Btn onClick={() => setWizardStep(s => s + 1)}>Siguiente →</Btn>
-                  : <Btn icon="save" onClick={saveVisit} style={{ background: C.success }}>Guardar Visita ✓</Btn>
+                  ? <Btn onClick={() => { setWizardStep(s => s + 1); window.scrollTo({ top: 0 }); }} style={{ padding: "13px 22px", fontSize: 15 }}>Siguiente →</Btn>
+                  : <Btn icon="save" onClick={saveVisit} style={{ background: C.success, padding: "13px 22px", fontSize: 15 }}>Guardar Visita ✓</Btn>
               )}
             </div>
 
@@ -5632,7 +5695,7 @@ const fetchVisits = async (clientId) => {
   // ── Si está en portal de cliente, renderizar portal ──
   if (vw === "clientPortal" && portalClient) return ClientPortal;
 
-  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView  };
+  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
 
 return (
   <div style={{ fontFamily: ff, minHeight: "100vh", background: C.bg, color: C.text }}>
