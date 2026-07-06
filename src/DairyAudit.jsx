@@ -2011,6 +2011,17 @@ const CATEGORIES = [
   { id: "estres_calorico", name: "Verano / Estrés Calórico", icon: "sun", color: "#DC2626", sections: ESTRES_CALORICO_SECTIONS },
 ];
 
+// Secciones esenciales por módulo — preset "Visita rápida"
+// (lo que se mide SIEMPRE para mantener tendencias comparables entre visitas)
+const CORE_SECTIONS = {
+  preparto: ["cms", "ph", "bcs", "heces", "llenado_ruminal", "observaciones_finales"],
+  frescas: ["fr_cetosis", "fr_dmi", "fr_produccion", "fr_bcs", "fr_heces", "fr_rumen", "fr_plan"],
+  produccion: ["vp_bcs", "vp_heces", "vp_general", "vp_plan"],
+  calidad_cama: ["cama_medicion", "cama_indicador", "cama_plan"],
+  calidad_alimento: ["ali_ensilaje", "ali_grano", "ali_plan"],
+  estres_calorico: ["ec_ith", "ec_rutina", "ec_animales", "ec_plan"],
+};
+
 // ═══════════════════════════════════════════════════
 // VISIT SUMMARY EXTRACTOR
 // Extrae un resumen compacto de visit.data para mostrar
@@ -4665,143 +4676,87 @@ const Toast = msg && (
         </p>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 36 }}>
-        <div style={{
-          background: `linear-gradient(135deg, ${C.primaryDark} 0%, ${C.primary} 100%)`,
-          borderRadius: 16, padding: "20px 24px", color: "#fff",
-          boxShadow: `0 6px 24px rgba(26,79,186,0.3)`,
-        }}>
-          <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{clients.length}</div>
-          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6, fontWeight: 500 }}>Clientes activos</div>
-          <div style={{ marginTop: 12, opacity: 0.5, fontSize: 22 }}>🏡</div>
-        </div>
-        <div style={{
-          background: `linear-gradient(135deg, #0D7D47 0%, #15A85F 100%)`,
-          borderRadius: 16, padding: "20px 24px", color: "#fff",
-          boxShadow: `0 6px 24px rgba(13,125,71,0.25)`,
-        }}>
-          <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{allVisitsCache.length || "—"}</div>
-          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6, fontWeight: 500 }}>Visitas totales</div>
-          <div style={{ marginTop: 12, opacity: 0.5, fontSize: 22 }}>📋</div>
-        </div>
+      {/* Resumen compacto */}
+      <div style={{ fontSize: 14, color: C.textLight, marginBottom: 24, fontWeight: 500 }}>
+        🏡 {clients.length} cliente{clients.length !== 1 ? "s" : ""} · 📋 {allVisitsCache.length || 0} visita{allVisitsCache.length !== 1 ? "s" : ""} registradas
       </div>
 
-      {/* ── Agenda: próximas visitas ── */}
+      {/* ── HOY: agenda + alertas unificadas, una tarjeta por cliente ── */}
       {(() => {
         if (!allVisitsCache.length || !clients.length) return null;
         const hoy = new Date();
-        const rows = clients.map(c => {
-          const fechas = allVisitsCache.filter(v => v.client_id === c.id).map(v => v.fecha).filter(Boolean).sort();
-          const last = fechas[fechas.length - 1] || null;
-          if (!last) return null;
-          const freq = parseInt(c.frecuencia_dias) || 45;
-          const diasDesde = Math.floor((hoy - new Date(last)) / 86400000);
-          const diasRestantes = freq - diasDesde;
-          return { c, last, freq, diasDesde, diasRestantes };
-        }).filter(Boolean).sort((a, b) => a.diasRestantes - b.diasRestantes).slice(0, 8);
+        const chip = (col) => ({ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 99, background: col + "12", color: col, border: `1px solid ${col}30` });
 
-        if (!rows.length) return null;
-        return (
-          <div style={{ marginBottom: 36 }}>
-            <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>📅 Próximas visitas</h3>
-            <div style={{ display: "grid", gap: 8 }}>
-              {rows.map(({ c, last, freq, diasRestantes }) => {
-                const vencida = diasRestantes < 0;
-                const pronto = diasRestantes >= 0 && diasRestantes <= 7;
-                const col = vencida ? C.danger : pronto ? C.warning : C.textLight;
-                return (
-                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, borderRadius: 12, border: `1px solid ${C.borderLight}`, borderLeft: `4px solid ${col}`, padding: "12px 16px", flexWrap: "wrap" }}>
-                    <div style={{ minWidth: 160, flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{c.nombre}</div>
-                      <div style={{ fontSize: 12, color: C.textLight }}>{c.establecimiento} · última: {fmt(last)} · cada {freq} días</div>
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: col, flexShrink: 0 }}>
-                      {vencida ? `vencida hace ${-diasRestantes} día${-diasRestantes !== 1 ? "s" : ""}` : diasRestantes === 0 ? "hoy" : `en ${diasRestantes} día${diasRestantes !== 1 ? "s" : ""}`}
-                    </span>
-                    <Btn size="sm" onClick={() => { setSelClient(c); setVw("briefing"); }} style={{ background: C.success, flexShrink: 0 }}>🧭 Preparar</Btn>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Requiere atención ── */}
-      {(() => {
-        if (!allVisitsCache.length || !clients.length) return null;
-        const hoy = new Date();
-        const porCliente = [];
-
-        clients.forEach(c => {
+        const tarjetas = clients.map(c => {
           const cVisits = allVisitsCache.filter(v => v.client_id === c.id);
-          if (!cVisits.length) return;
-          const items = [];
+          if (!cVisits.length) return null;
+          const freq = parseInt(c.frecuencia_dias) || 45;
+          const lastFecha = cVisits.map(v => v.fecha).filter(Boolean).sort().pop() || null;
+          const diasDesde = lastFecha ? Math.floor((hoy - new Date(lastFecha)) / 86400000) : null;
+          const diasRestantes = diasDesde !== null ? freq - diasDesde : null;
 
-          // Días sin visita
-          const lastFecha = cVisits.map(v => v.fecha).filter(Boolean).sort().pop();
-          const dias = lastFecha ? Math.floor((hoy - new Date(lastFecha)) / 86400000) : null;
-          const freqAlerta = parseInt(c.frecuencia_dias) || 45;
-          if (dias !== null && dias > freqAlerta) items.push({ txt: `Sin visita hace ${dias} días (acordado: cada ${freqAlerta})`, color: C.warning });
-
-          // Última visita por módulo
           const ultimaPorCat = {};
           cVisits.forEach(v => {
             const k = v.categoryId || v.category_id;
             if (!ultimaPorCat[k] || (v.fecha || "") > (ultimaPorCat[k].fecha || "")) ultimaPorCat[k] = v;
           });
 
-          // Métricas fuera de rango en la última visita de cada módulo
+          const rojos = [];
           METRICS.forEach(m => {
             const v = ultimaPorCat[m.cat];
             if (!v || !m.ref) return;
             const val = m.extract(v);
             if (val === null || isNaN(val)) return;
-            if (val < m.ref[0] || val > m.ref[1]) {
-              items.push({ txt: `${m.label}: ${val}${m.unit} (obj. ${m.ref[0]}–${m.ref[1]})`, color: C.danger });
-            }
+            if (val < m.ref[0] || val > m.ref[1]) rojos.push(`${m.label}: ${val}${m.unit} (obj. ${m.ref[0]}–${m.ref[1]})`);
           });
 
-          // Recomendaciones abiertas y pendientes arrastradas
           let abiertas = 0, pendientes = 0;
           Object.values(ultimaPorCat).forEach(v => {
             abiertas += (v.data?.plan_accion || []).length;
             pendientes += (v.data?.plan_revision || []).filter(it => it.estado === "pendiente").length;
           });
-          if (abiertas > 0) items.push({ txt: `${abiertas} recomendación${abiertas > 1 ? "es" : ""} en curso`, color: C.primary });
-          if (pendientes > 0) items.push({ txt: `${pendientes} pendiente${pendientes > 1 ? "s" : ""} de visitas anteriores`, color: C.warning });
 
-          if (items.length) porCliente.push({ client: c, items });
-        });
+          const tieneAlgo = (diasRestantes !== null && diasRestantes <= 7) || rojos.length || pendientes || abiertas;
+          if (!tieneAlgo) return null;
+          const urgencia = (diasRestantes !== null && diasRestantes < 0 ? 1000 - diasRestantes : 0) + rojos.length * 10 + pendientes * 5 + abiertas;
+          return { c, lastFecha, diasRestantes, rojos, abiertas, pendientes, urgencia };
+        }).filter(Boolean).sort((a, b) => b.urgencia - a.urgencia).slice(0, 8);
 
-        if (!porCliente.length) return (
+        if (!tarjetas.length) return (
           <div style={{ background: C.success + "10", border: `1px solid ${C.success}30`, borderRadius: 12, padding: "12px 18px", marginBottom: 36, fontSize: 14, color: C.success, fontWeight: 600 }}>
-            ✓ Todo en orden: sin indicadores fuera de rango ni visitas atrasadas.
+            ✓ Todo en orden: sin visitas por vencer, indicadores fuera de rango ni pendientes.
           </div>
         );
 
         return (
           <div style={{ marginBottom: 36 }}>
-            <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>⚠️ Requiere atención</h3>
+            <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: C.text }}>📌 Hoy</h3>
             <div style={{ display: "grid", gap: 10 }}>
-              {porCliente.map(({ client, items }) => (
-                <Card key={client.id} onClick={() => { setSelClient(client); setVw("clientDetail"); }}
-                  style={{ cursor: "pointer", borderLeft: `4px solid ${items.some(i => i.color === C.danger) ? C.danger : C.warning}` }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, minWidth: 150 }}>{client.nombre}<div style={{ fontSize: 12, color: C.textLight, fontWeight: 500 }}>{client.establecimiento}</div></div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}>
-                      {items.slice(0, 6).map((it, i) => (
-                        <span key={i} style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 99, background: it.color + "12", color: it.color, border: `1px solid ${it.color}30` }}>
-                          {it.txt}
-                        </span>
-                      ))}
-                      {items.length > 6 && <span style={{ fontSize: 12, color: C.textLight, padding: "3px 6px" }}>+{items.length - 6} más</span>}
+              {tarjetas.map(({ c, lastFecha, diasRestantes, rojos, abiertas, pendientes }) => {
+                const vencida = diasRestantes !== null && diasRestantes < 0;
+                const borde = vencida || rojos.length ? C.danger : (pendientes || (diasRestantes !== null && diasRestantes <= 7)) ? C.warning : C.primary;
+                return (
+                  <Card key={c.id} onClick={() => { setSelClient(c); setVw("clientDetail"); }} style={{ cursor: "pointer", borderLeft: `4px solid ${borde}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 170, flex: "0 0 auto" }}>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{c.nombre}</div>
+                        <div style={{ fontSize: 12, color: C.textLight }}>{c.establecimiento}{lastFecha ? ` · última: ${fmt(lastFecha)}` : ""}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1, minWidth: 200 }}>
+                        {diasRestantes !== null && diasRestantes <= 7 && (
+                          <span style={chip(vencida ? C.danger : C.warning)}>
+                            {vencida ? `visita vencida hace ${-diasRestantes} d` : diasRestantes === 0 ? "visita hoy" : `visita en ${diasRestantes} d`}
+                          </span>
+                        )}
+                        {rojos.length > 0 && <span style={chip(C.danger)} title={rojos.join("  ·  ")}>{rojos.length} indicador{rojos.length > 1 ? "es" : ""} en rojo</span>}
+                        {pendientes > 0 && <span style={chip(C.warning)}>{pendientes} pendiente{pendientes > 1 ? "s" : ""} de visitas anteriores</span>}
+                        {abiertas > 0 && <span style={chip(C.primary)}>{abiertas} recomendación{abiertas > 1 ? "es" : ""} en curso</span>}
+                      </div>
+                      <Btn size="sm" onClick={(e) => { e?.stopPropagation?.(); setSelClient(c); setVw("briefing"); }} style={{ background: C.success, flexShrink: 0 }}>🧭 Preparar</Btn>
                     </div>
-                    <span style={{ color: C.textLight, fontSize: 18, alignSelf: "center" }}>›</span>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           </div>
         );
@@ -5210,11 +5165,40 @@ const fetchVisits = async (clientId) => {
       </Card>
 
       {/* Checklist de secciones */}
+      {/* ── Presets: rápida / completa ── */}
+      {(() => {
+        const core = (CORE_SECTIONS[selCat.id] || []).filter(id => selCat.sections.some(s => s.id === id));
+        const allIds = selCat.sections.map(s => s.id);
+        const act = activeSections || allIds;
+        const isCore = core.length > 0 && act.length === core.length && core.every(id => act.includes(id));
+        const isAll = act.length === allIds.length;
+        const presets = [
+          ...(core.length ? [{ id: "rapida", icon: "⚡", title: "Visita rápida", desc: `${core.length} secciones esenciales — lo que se mide siempre`, active: isCore && !isAll, onClick: () => setActiveSections(core) }] : []),
+          { id: "completa", icon: "📋", title: "Auditoría completa", desc: `Las ${allIds.length} secciones del módulo`, active: isAll, onClick: () => setActiveSections(allIds) },
+        ];
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginBottom: 16 }}>
+            {presets.map(p => (
+              <div key={p.id} onClick={p.onClick}
+                style={{
+                  cursor: "pointer", textAlign: "center", padding: "16px 14px", borderRadius: 12,
+                  background: p.active ? selCat.color : C.card, color: p.active ? "#fff" : C.text,
+                  border: `2px solid ${p.active ? selCat.color : C.borderLight}`, transition: "all 0.15s",
+                }}>
+                <div style={{ fontSize: 24 }}>{p.icon}</div>
+                <div style={{ fontWeight: 800, fontSize: 15, marginTop: 4 }}>{p.title}</div>
+                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{p.desc}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.borderLight}`, overflow: "hidden", marginBottom: 20 }}>
         <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>¿Qué vas a evaluar hoy?</div>
-            <div style={{ fontSize: 12, color: C.textLight, marginTop: 2 }}>Destildá lo que no vas a hacer. Todo activo por defecto.</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>⚙️ Personalizar selección</div>
+            <div style={{ fontSize: 12, color: C.textLight, marginTop: 2 }}>Tocá una sección para incluirla o sacarla.</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setActiveSections(selCat.sections.map(s => s.id))} style={{ fontSize: 12, color: C.primary, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Todos</button>
@@ -5903,4 +5887,4 @@ return (
       {views[vw]}
     </div>
   </div>
-)} 
+)}
