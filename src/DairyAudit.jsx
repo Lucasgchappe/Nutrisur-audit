@@ -3206,6 +3206,17 @@ const METRICS = [
   { id: "limpieza_ubre",  label: "Limpieza ubre % ≥3",        unit: "%",   ref: [0, 15],      cat: "frescas",         extract: (v) => { const d = v.data?.fr_limpieza_cleanliness; if (!d?.cows?.length) return null; const s = d.cows.map(c=>parseFloat(c.ubre)).filter(x=>!isNaN(x)); return s.length ? round(s.filter(x=>x>=3).length/s.length*100,1) : null; } },
   { id: "rumiacion",      label: "Rumiando % (producción)",   unit: "%",   ref: [50, 70],     cat: "produccion",      extract: (v) => parseFloat(v.data?.vp_general_vp_pct_rumiando) || null },
   { id: "bcs_prod",       label: "BCS prod. promedio",        unit: "",    ref: [2.75, 3.5],  cat: "produccion",      extract: (v) => { const cs = v.data?.vp_bcs_cowscore; if (!cs?.cows?.length) return null; const s = cs.cows.map(c=>parseFloat(c.score)).filter(x=>!isNaN(x)); return s.length ? round(s.reduce((a,b)=>a+b,0)/s.length,2) : null; } },
+
+  // ── Indicadores calculados: no requieren carga extra, se derivan de datos ya relevados ──
+  { id: "ratio_gp",       label: "Relación Grasa/Proteína",   unit: "",    ref: [1.0, 1.4],   cat: "frescas",         extract: (v) => { const g = parseFloat(v.data?.fr_prod_grasa), p = parseFloat(v.data?.fr_prod_prot); if (!isNaN(g) && !isNaN(p) && p > 0) return round(g / p, 2); const fp = parseFloat(v.data?.fr_prod_fp); return isNaN(fp) ? null : fp; } },
+  { id: "efic_alim",      label: "Eficiencia alimenticia",    unit: "lt/kg", ref: [1.4, 1.8], cat: "frescas",         extract: (v) => { const l = parseFloat(v.data?.fr_prod_14dim), c = parseFloat(v.data?.fr_dmi_oferta); return !isNaN(l) && !isNaN(c) && c > 0 ? round(l / c, 2) : null; } },
+  { id: "refusas_fr",     label: "Refusas % (frescas)",       unit: "%",   ref: [5, 10],      cat: "frescas",         extract: (v) => { const x = parseFloat(v.data?.fr_dmi_refusas); return isNaN(x) ? null : x; } },
+  { id: "refusas_pre",    label: "Refusas % (preparto)",      unit: "%",   ref: [5, 10],      cat: "preparto",        extract: (v) => { const x = parseFloat(v.data?.cms_refusas_pct); return isNaN(x) ? null : x; } },
+  { id: "sorting",        label: "Sorting (0=sin · 3=severo)", unit: "",   ref: [0, 1],       cat: "frescas",         extract: (v) => { const s = v.data?.fr_pennstate_pennstate?.sorting; const map = { "Sin sorting": 0, "Sorting leve": 1, "Sorting moderado": 2, "Sorting severo": 3 }; return Object.prototype.hasOwnProperty.call(map, s) ? map[s] : null; } },
+  { id: "reserva_min",    label: "Reserva forrajera mín.",    unit: "días", ref: [30, 365],   cat: null,              extract: (v) => { const d = v.data || {}; let min = null; Object.keys(d).forEach(k => { if (!k.endsWith("_stock") || !Array.isArray(d[k])) return; d[k].forEach(l => { const sTC = parseFloat(l.stock_kg_tc) || 0; const cons = parseFloat(l.consumo_kg_tc) || 0; const vacas = parseFloat(l.vacas) || 1; if (cons > 0 && sTC > 0) { const dias = Math.floor(sTC / (cons * vacas)); if (min === null || dias < min) min = dias; } }); }); return min; } },
+  { id: "metritis",       label: "Metritis %",                unit: "%",   ref: [0, 10],      cat: "frescas",         extract: (v) => { const x = parseFloat(v.data?.fr_enfermedades_diseases?.metritis_incidencia); return isNaN(x) ? null : x; } },
+  { id: "rp",             label: "Retención de placenta %",   unit: "%",   ref: [0, 8],       cat: "frescas",         extract: (v) => { const x = parseFloat(v.data?.fr_enfermedades_diseases?.rp_incidencia); return isNaN(x) ? null : x; } },
+  { id: "hipocalcemia",   label: "Hipocalcemia %",            unit: "%",   ref: [0, 5],       cat: "frescas",         extract: (v) => { const x = parseFloat(v.data?.fr_enfermedades_diseases?.hipocalcemia_incidencia); return isNaN(x) ? null : x; } },
 ];
 
 const CLIENT_COLORS = ["#1565C0","#E76F51","#2D9CDB","#27AE60","#9B51E0","#F2994A","#EB5757","#0F766E"];
@@ -3316,7 +3327,7 @@ function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, inf
     const fichaClientObj = clients.find(c => c.id === fichaId);
     const cards = METRICS.map(m => {
       const series = allVisitsCache
-        .filter(v => v.client_id === fichaId && (v.categoryId || v.category_id) === m.cat)
+        .filter(v => v.client_id === fichaId && (!m.cat || (v.categoryId || v.category_id) === m.cat))
         .map(v => ({ fecha: v.fecha, val: m.extract(v) }))
         .filter(p => p.val !== null && !isNaN(p.val))
         .sort((a, b) => (a.fecha || "").localeCompare(b.fecha || ""));

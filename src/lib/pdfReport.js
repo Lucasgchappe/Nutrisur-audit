@@ -241,6 +241,28 @@ function collectKpis(d, category) {
     }
   }
 
+  // Relación grasa/proteína (frescas)
+  const g = parseFloat(d.fr_prod_grasa), p = parseFloat(d.fr_prod_prot);
+  if (!isNaN(g) && !isNaN(p) && p > 0) {
+    const r = round(g / p, 2);
+    kpis.push({
+      label: "Relación grasa/proteína",
+      value: `${r}  (objetivo 1.0–1.4)`,
+      color: r >= 1.0 && r <= 1.4 ? COL.success : COL.danger,
+    });
+  }
+
+  // Eficiencia alimenticia (frescas)
+  const lts = parseFloat(d.fr_prod_14dim), cms = parseFloat(d.fr_dmi_oferta);
+  if (!isNaN(lts) && !isNaN(cms) && cms > 0) {
+    const fe = round(lts / cms, 2);
+    kpis.push({
+      label: "Eficiencia alimenticia",
+      value: `${fe} lt/kg MS  (objetivo 1.4–1.8)`,
+      color: fe >= 1.4 && fe <= 1.8 ? COL.success : COL.warning,
+    });
+  }
+
   return kpis;
 }
 
