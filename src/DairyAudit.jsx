@@ -5282,11 +5282,13 @@ const fetchVisits = async (clientId) => {
                   if (sec.customComponent?.startsWith("cowscore_")) {
                     const prevCs = pd[`${sec.id}_cowscore`];
                     const currCs = formData[`${sec.id}_cowscore`];
-                    if (prevCs?.cows?.length) {
-                      const prevAvg = round(prevCs.cows.map(c => parseFloat(c.score)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                    const prevVals = (prevCs?.cows || []).map(c => parseFloat(c.score)).filter(n => !isNaN(n));
+                    if (prevVals.length) {
+                      const prevAvg = round(prevVals.reduce((s, n) => s + n, 0) / prevVals.length, 2);
                       const label = "Prom. " + sec.title.replace(/[a-z]\)\s*/i, "").trim();
-                      if (currCs?.cows?.length) {
-                        const currAvg = round(currCs.cows.map(c => parseFloat(c.score)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                      const currVals = (currCs?.cows || []).map(c => parseFloat(c.score)).filter(n => !isNaN(n));
+                      if (currVals.length) {
+                        const currAvg = round(currVals.reduce((s, n) => s + n, 0) / currVals.length, 2);
                         const delta = round(currAvg - prevAvg, 2);
                         const icon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
                         const col = delta === 0 ? C.textLight : (delta > 0 ? C.success : C.danger);
@@ -5299,11 +5301,13 @@ const fetchVisits = async (clientId) => {
                   // pH
                   if (sec.customComponent === "ph_scoring") {
                     const prevPh = pd[`${sec.id}_ph`];
-                    if (prevPh?.samples?.length) {
-                      const prevAvg = round(prevPh.samples.map(s => parseFloat(s.ph)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                    const prevPhVals = (prevPh?.samples || []).map(s => parseFloat(s.ph)).filter(n => !isNaN(n));
+                    if (prevPhVals.length) {
+                      const prevAvg = round(prevPhVals.reduce((s, n) => s + n, 0) / prevPhVals.length, 2);
                       const currPh = formData[`${sec.id}_ph`];
-                      if (currPh?.samples?.length) {
-                        const currAvg = round(currPh.samples.map(s => parseFloat(s.ph)).filter(n => !isNaN(n)).reduce((s, n, _, a) => s + n / a.length, 0), 2);
+                      const currPhVals = (currPh?.samples || []).map(s => parseFloat(s.ph)).filter(n => !isNaN(n));
+                      if (currPhVals.length) {
+                        const currAvg = round(currPhVals.reduce((s, n) => s + n, 0) / currPhVals.length, 2);
                         const delta = round(currAvg - prevAvg, 2);
                         const icon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
                         const col = delta === 0 ? C.textLight : (delta > 0 ? C.success : C.danger);
@@ -5628,7 +5632,7 @@ const fetchVisits = async (clientId) => {
   // ── Si está en portal de cliente, renderizar portal ──
   if (vw === "clientPortal" && portalClient) return ClientPortal;
 
-  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView };
+  const views = { dashboard: Dashboard, clients: ClientList, newClient: NewClient, clientDetail: ClientDetail, startVisit: StartVisit, newVisit: VisitForm, viewVisit: VisitForm, informes: InformesView  };
 
 return (
   <div style={{ fontFamily: ff, minHeight: "100vh", background: C.bg, color: C.text }}>
