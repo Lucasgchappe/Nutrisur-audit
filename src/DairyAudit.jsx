@@ -162,6 +162,18 @@ const C = {
 const ff = "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif";
 const ffSerif = "'Lora', Georgia, serif";
 
+// ── Detección de pantalla chica (celular) ──
+const useIsMobile = () => {
+  const [m, setM] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const h = (e) => setM(e.matches);
+    mq.addEventListener ? mq.addEventListener("change", h) : mq.addListener(h);
+    return () => { mq.removeEventListener ? mq.removeEventListener("change", h) : mq.removeListener(h); };
+  }, []);
+  return m;
+};
+
 // ─── Base Components ───
 const Btn = ({ children, onClick, variant = "primary", size = "md", icon, disabled, style: sx, ...r }) => {
   const vars = {
@@ -3261,6 +3273,7 @@ const Sparkline = ({ pts, color = C.primary, refRange }) => {
 // INFORMES PANEL (componente externo — sin hooks condicionales)
 // ═══════════════════════════════════════════════════
 function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, infoMetric, setInfoMetric, infoTab, setInfoTab }) {
+  const isMobile = useIsMobile();
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [tab, setTab] = useState("evolucion"); // evolucion | resumen | comparacion
@@ -3353,9 +3366,9 @@ function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, inf
     const lastFecha = allVisitsCache.filter(v => v.client_id === fichaId).map(v => v.fecha).sort().pop();
 
     return (
-      <div style={{ padding: "28px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+      <div style={{ padding: isMobile ? "16px 12px" : "28px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
         <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontFamily: ffSerif, fontSize: 28, margin: 0, color: C.text }}>Informes y Análisis</h2>
+          <h2 style={{ fontFamily: ffSerif, fontSize: isMobile ? 22 : 28, margin: 0, color: C.text }}>Informes y Análisis</h2>
           <p style={{ color: C.textLight, marginTop: 4, fontSize: 14 }}>Todos los indicadores del tambo en una sola pantalla</p>
         </div>
         {ModeToggle}
@@ -3420,10 +3433,10 @@ function InformesPanel({ clients, allVisitsCache, infoClient, setInfoClient, inf
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: isMobile ? "16px 12px" : "28px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
       {/* Encabezado */}
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontFamily: ffSerif, fontSize: 28, margin: 0, color: C.text }}>Informes y Análisis</h2>
+        <h2 style={{ fontFamily: ffSerif, fontSize: isMobile ? 22 : 28, margin: 0, color: C.text }}>Informes y Análisis</h2>
         <p style={{ color: C.textLight, marginTop: 4, fontSize: 14 }}>Seguimiento de indicadores técnicos por visita, cliente y período</p>
       </div>
       {ModeToggle}
@@ -3841,6 +3854,7 @@ export default function DairyAuditApp() {
   const [draftSavedAt, setDraftSavedAt] = useState(null); // hora del último auto-guardado (indicador visible)
   const [wizardStep, setWizardStep] = useState(0);       // paso actual del wizard de visita
   const navRestoredRef = useRef(false);                  // evita restaurar más de una vez por sesión
+  const isMobile = useIsMobile();                        // layout compacto en celular
 
   // Clave única de borrador por usuario/cliente/módulo
   const draftKey = user && selClient && selCat
@@ -4593,24 +4607,26 @@ const Toast = msg && (
   const Header = (
     <div style={{
       background: `linear-gradient(90deg, ${C.primaryDark} 0%, ${C.primary} 60%, ${C.primaryLight} 100%)`,
-      color: "#fff", padding: "0 32px", height: 62,
-      display: "flex", alignItems: "center", justifyContent: "space-between",
+      color: "#fff", padding: isMobile ? "0 10px" : "0 32px", height: isMobile ? 56 : 62,
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
       position: "sticky", top: 0, zIndex: 100,
       boxShadow: "0 2px 20px rgba(14,46,114,0.4)",
     }}>
       {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, cursor: "pointer", flexShrink: 0 }}
         onClick={() => { setVw("dashboard"); setSelClient(null); setSelVisit(null); }}>
         <div style={{
-          width: 38, height: 38, borderRadius: 10,
+          width: isMobile ? 34 : 38, height: isMobile ? 34 : 38, borderRadius: 10,
           background: "rgba(255,255,255,0.18)", backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 20, border: "1px solid rgba(255,255,255,0.25)",
         }}>🐄</div>
-        <div>
-          <div style={{ fontFamily: ffSerif, fontSize: 20, fontWeight: 700, letterSpacing: 0.5, lineHeight: 1.2 }}>Nutrisur</div>
-          <div style={{ fontSize: 10, opacity: 0.6, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, lineHeight: 1 }}>Auditoría Lechera</div>
-        </div>
+        {!isMobile && (
+          <div>
+            <div style={{ fontFamily: ffSerif, fontSize: 20, fontWeight: 700, letterSpacing: 0.5, lineHeight: 1.2 }}>Nutrisur</div>
+            <div style={{ fontSize: 10, opacity: 0.6, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600, lineHeight: 1 }}>Auditoría Lechera</div>
+          </div>
+        )}
       </div>
       {/* Nav tabs centrados */}
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -4621,42 +4637,43 @@ const Toast = msg && (
               if (item.id === "dashboard") { setVw("dashboard"); setSelClient(null); setSelCat(null); setSelVisit(null); }
               else setVw(item.id);
             }} style={{
-              display: "flex", alignItems: "center", gap: 7, padding: "8px 18px",
+              display: "flex", alignItems: "center", flexDirection: isMobile ? "column" : "row",
+              gap: isMobile ? 2 : 7, padding: isMobile ? "6px 10px" : "8px 18px",
               background: active ? "rgba(255,255,255,0.18)" : "transparent",
               color: active ? "#fff" : "rgba(255,255,255,0.65)",
               border: "none", borderRadius: 10, cursor: "pointer",
-              fontSize: 14, fontWeight: active ? 700 : 500, fontFamily: ff,
+              fontSize: isMobile ? 10 : 14, fontWeight: active ? 700 : 500, fontFamily: ff,
               transition: "all 0.18s",
               borderBottom: active ? "2px solid rgba(255,255,255,0.9)" : "2px solid transparent",
             }}>
-              <Icon name={item.icon} size={16} />
+              <Icon name={item.icon} size={isMobile ? 18 : 16} />
               {item.label}
             </button>
           );
         })}
       </div>
       {/* User + logout */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, flexShrink: 0 }}>
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
           background: "rgba(255,255,255,0.13)", borderRadius: 22,
-          padding: "6px 16px 6px 10px", fontSize: 13, fontWeight: 600,
+          padding: isMobile ? 3 : "6px 16px 6px 10px", fontSize: 13, fontWeight: 600,
           border: "1px solid rgba(255,255,255,0.2)",
         }}>
           <div style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>
             {(user?.user_metadata?.nombre || user?.email || "T")[0].toUpperCase()}
           </div>
-          <span>{user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</span>
+          {!isMobile && <span>{user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"}</span>}
         </div>
-        <button onClick={handleLogout} style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "6px 14px",
+        <button onClick={handleLogout} title="Cerrar sesión" style={{
+          display: "flex", alignItems: "center", gap: 6, padding: isMobile ? "6px 8px" : "6px 14px",
           background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)",
           border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8,
           cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: ff,
           transition: "all 0.18s",
         }}>
           <Icon name="logout" size={15} />
-          Salir
+          {!isMobile && "Salir"}
         </button>
       </div>
     </div>
@@ -4665,10 +4682,10 @@ const Toast = msg && (
 
   // ── DASHBOARD ──
   const Dashboard = (
-    <div style={{ padding: "32px 36px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: isMobile ? "18px 14px" : "32px 36px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
       {/* Header bienvenida */}
       <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontFamily: ffSerif, fontSize: 28, marginBottom: 4, color: C.text, fontWeight: 700 }}>
+        <h2 style={{ fontFamily: ffSerif, fontSize: isMobile ? 22 : 28, marginBottom: 4, color: C.text, fontWeight: 700 }}>
           Bienvenido, {user?.user_metadata?.nombre || user?.email?.split("@")[0] || "Técnico"} 👋
         </h2>
         <p style={{ color: C.textLight, margin: 0, fontSize: 15, textTransform: "capitalize" }}>
@@ -4836,10 +4853,10 @@ const Toast = msg && (
 
   // ── CLIENTS ──
   const ClientList = (
-    <div style={{ padding: "32px 36px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: isMobile ? "18px 14px" : "32px 36px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h2 style={{ fontFamily: ffSerif, fontSize: 26, margin: "0 0 4px", color: C.text, fontWeight: 700 }}>Clientes</h2>
+          <h2 style={{ fontFamily: ffSerif, fontSize: isMobile ? 21 : 26, margin: "0 0 4px", color: C.text, fontWeight: 700 }}>Clientes</h2>
           <p style={{ margin: 0, fontSize: 14, color: C.textLight }}>{clients.length} establecimiento{clients.length !== 1 ? "s" : ""} registrado{clients.length !== 1 ? "s" : ""}</p>
         </div>
         <Btn icon="plus" onClick={() => { setClientForm({ nombre: "", establecimiento: "", localidad: "", provincia: "", contacto: "", email: "", sistema_productivo: "" }); setVw("newClient"); }}>
@@ -4898,11 +4915,11 @@ const Toast = msg && (
 
   // ── NEW CLIENT ──
   const NewClient = (
-    <div style={{ padding: "32px 36px", maxWidth: 680, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: isMobile ? "18px 14px" : "32px 36px", maxWidth: 680, margin: "0 auto", width: "100%" }}>
       <button onClick={() => setVw("clients")} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textLight, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: ff, padding: "6px 0", marginBottom: 24 }}>
         <Icon name="back" size={16} color={C.textLight} /> Volver a clientes
       </button>
-      <h2 style={{ fontFamily: ffSerif, fontSize: 26, marginBottom: 4, color: C.text, fontWeight: 700 }}>
+      <h2 style={{ fontFamily: ffSerif, fontSize: isMobile ? 21 : 26, marginBottom: 4, color: C.text, fontWeight: 700 }}>
         {clientForm.id ? "Editar Cliente" : "Nuevo Cliente"}
       </h2>
       <p style={{ color: C.textLight, margin: "0 0 28px", fontSize: 14 }}>Completá los datos del establecimiento</p>
@@ -4989,7 +5006,7 @@ const fetchVisits = async (clientId) => {
 
   // ── CLIENT DETAIL ── (ENHANCED with VisitHistoryPanel)
   const ClientDetail = selClient && (
-    <div style={{ padding: "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: isMobile ? "16px 12px" : "24px 32px", maxWidth: 1400, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => { setVw("clients"); setSelClient(null); }} style={{ marginBottom: 16 }}>Volver</Btn>
       <Card style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -5144,7 +5161,7 @@ const fetchVisits = async (clientId) => {
 
   // ── START VISIT (checklist de secciones) ──
   const StartVisit = selCat && (
-    <div style={{ padding: "24px 32px", maxWidth: 700, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: isMobile ? "16px 12px" : "24px 32px", maxWidth: 700, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clientDetail")} style={{ marginBottom: 16 }}>Volver</Btn>
 
       {/* Header */}
@@ -5261,7 +5278,7 @@ const fetchVisits = async (clientId) => {
 
   // ── VISIT FORM ──
   const VisitForm = selCat && (
-    <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+    <div style={{ padding: isMobile ? "16px 12px" : "24px 32px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
       <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clientDetail")} style={{ marginBottom: 16 }}>Volver</Btn>
       {/* ── Banner de borrador recuperable ── */}
       {draftBanner && vw === "newVisit" && !selVisit && (
@@ -5642,9 +5659,9 @@ const fetchVisits = async (clientId) => {
     }).sort((a, b) => (b.dias ?? 99999) - (a.dias ?? 99999));
 
     return (
-      <div style={{ padding: "24px 32px", maxWidth: 900, margin: "0 auto", width: "100%" }}>
+      <div style={{ padding: isMobile ? "16px 12px" : "24px 32px", maxWidth: 900, margin: "0 auto", width: "100%" }}>
         <Btn variant="ghost" icon="back" size="sm" onClick={() => setVw("clientDetail")} style={{ marginBottom: 16 }}>Volver</Btn>
-        <h2 style={{ fontFamily: ffSerif, fontSize: 26, margin: "0 0 4px", fontWeight: 700 }}>🧭 Preparar visita</h2>
+        <h2 style={{ fontFamily: ffSerif, fontSize: isMobile ? 21 : 26, margin: "0 0 4px", fontWeight: 700 }}>🧭 Preparar visita</h2>
         <p style={{ color: C.textLight, margin: "0 0 20px", fontSize: 15 }}>{selClient.nombre} — {selClient.establecimiento}{selClient.localidad ? ` · ${selClient.localidad}` : ""}</p>
 
         {/* Estado general */}
@@ -5743,7 +5760,7 @@ const fetchVisits = async (clientId) => {
       {/* Header portal */}
       <div style={{
         background: `linear-gradient(90deg, ${C.primaryDark} 0%, ${C.primary} 100%)`,
-        color: "#fff", padding: "0 32px", height: 62,
+        color: "#fff", padding: isMobile ? "0 12px" : "0 32px", height: isMobile ? 56 : 62,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         boxShadow: "0 2px 20px rgba(14,46,114,0.4)",
       }}>
@@ -5770,7 +5787,7 @@ const fetchVisits = async (clientId) => {
       {/* Contenido del portal */}
       {!portalSelVisit ? (
         // ── Vista: listado de visitas del cliente ──
-        <div style={{ padding: "32px 36px", maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ padding: isMobile ? "18px 14px" : "32px 36px", maxWidth: 900, margin: "0 auto" }}>
           {/* Info del establecimiento */}
           <Card style={{ marginBottom: 28, background: `linear-gradient(135deg, ${C.primaryDark}08, ${C.primary}05)`, border: `1.5px solid ${C.primary}20` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -5827,7 +5844,7 @@ const fetchVisits = async (clientId) => {
         </div>
       ) : (
         // ── Vista: detalle de una visita (solo lectura) ──
-        <div style={{ padding: "24px 36px", maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ padding: isMobile ? "16px 12px" : "24px 36px", maxWidth: 900, margin: "0 auto" }}>
           <button onClick={() => { setPortalSelVisit(null); setPortalSelCat(null); }}
             style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textLight, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: ff, padding: "6px 0", marginBottom: 20 }}>
             <Icon name="back" size={16} color={C.textLight} /> Volver al historial
