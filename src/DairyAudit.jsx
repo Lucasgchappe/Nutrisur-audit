@@ -1268,9 +1268,11 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
 const PHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => {
   const TARGET = [6.0, 6.8]; // pH de orina objetivo dieta aniónica
   const samples = value.samples || [];
+  const [showDetail, setShowDetail] = useState(false); // análisis plegado mientras se carga
 
-  const addSample = () => {
-    onChange({ ...value, samples: [...samples, { id: uid(), num: samples.length + 1, caravana: "", ph: "", nota: "" }] });
+  const addSample = (count = 1) => {
+    const nuevos = Array.from({ length: count }, (_, i) => ({ id: uid() + "_" + i, num: samples.length + i + 1, caravana: "", ph: "", nota: "" }));
+    onChange({ ...value, samples: [...samples, ...nuevos] });
   };
   const updateSample = (id, field, val) => {
     onChange({ ...value, samples: samples.map(s => s.id === id ? { ...s, [field]: val } : s) });
@@ -1320,17 +1322,17 @@ const PHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
     <div>
       <p style={{ fontSize: 12, color: C.textLight, margin: "0 0 10px", fontStyle: "italic" }}>pH de orina por vaca — evalúa efectividad de la dieta aniónica. 🟢 6.0–6.8 (ideal) | 🟡 5.5–5.99 (sobre-acidificación) o 6.8–7.5 (dieta insuficiente) | 🔴 &lt;5.5 o &gt;7.5 (problema)</p>
 
+      {/* Resumen de una línea (siempre visible) */}
       {n > 0 && (
-        <>
-          {/* Semáforo global */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, padding: "10px 16px", background: globalColor + "12", borderRadius: 10, border: `1.5px solid ${globalColor}40` }}>
-            <span style={{ fontSize: 28 }}>{globalSemaforo}</span>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: globalColor }}>pH orina promedio: {avg}</div>
-              <div style={{ fontSize: 12, color: C.textLight }}>Objetivo: {TARGET[0]}–{TARGET[1]} | {n} vacas evaluadas</div>
-            </div>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13, marginBottom: 10 }}>
+          <span style={{ fontSize: 16 }}>{globalSemaforo}</span>
+          <span style={{ fontWeight: 800, fontSize: 16, color: globalColor }}>pH {avg}</span>
+          <span style={{ color: C.textLight }}>promedio · {n} vaca{n > 1 ? "s" : ""} · objetivo {TARGET[0]}–{TARGET[1]} · {pctEnObjetivo}% en objetivo</span>
+        </div>
+      )}
 
+      {(readOnly || showDetail) && n > 0 && (
+        <>
           {/* Stats */}
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
             <StatBox label="Mínimo" val={minPH} color={phColor(minPH)} />
@@ -1370,7 +1372,10 @@ const PHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
         </>
       )}
 
-      {/* Tabla de muestras */}
+      {/* Tabla de muestras: al cargar solo las últimas 3; completa en lectura o al desplegar */}
+      {samples.length > 3 && !readOnly && !showDetail && (
+        <div style={{ fontSize: 11, color: C.textLight, marginBottom: 4 }}>Últimas 3 cargadas (de {samples.length}):</div>
+      )}
       {samples.length > 0 && (
         <div style={{ overflowX: "auto", marginBottom: 10 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -1385,7 +1390,7 @@ const PHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
               </tr>
             </thead>
             <tbody>
-              {samples.map(s => {
+              {(readOnly || showDetail ? samples : samples.slice(-3)).map(s => {
                 const v = parseFloat(s.ph);
                 return (
                   <tr key={s.id} style={{ borderBottom: `1px solid ${C.borderLight}`, background: !isNaN(v) && v < 5.8 ? C.danger + "08" : !isNaN(v) && v < 6.0 ? C.warning + "08" : "transparent" }}>
@@ -1416,10 +1421,17 @@ const PHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
         </div>
       )}
 
+      {!readOnly && samples.length > 0 && (
+        <button onClick={() => setShowDetail(s => !s)}
+          style={{ background: "none", border: "none", color: C.primary, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: ff, padding: "2px 0", marginBottom: 10, display: "block" }}>
+          {showDetail ? "▴ Ocultar detalle y análisis" : `▾ Ver todas las muestras (${samples.length}) y análisis`}
+        </button>
+      )}
+
       {!readOnly && (
         <div style={{ display: "flex", gap: 8 }}>
-          <Btn variant="outline" size="sm" icon="plus" onClick={addSample}>Agregar muestra</Btn>
-          <Btn variant="ghost" size="sm" onClick={() => { for (let i = 0; i < 5; i++) addSample(); }}>+5 muestras</Btn>
+          <Btn variant="outline" size="sm" icon="plus" onClick={() => addSample(1)}>Agregar muestra</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => addSample(5)}>+5 muestras</Btn>
         </div>
       )}
 
@@ -1439,7 +1451,11 @@ const PHScoring = ({ value = { samples: [], obs: "" }, onChange, readOnly }) => 
 // ═══════════════════════════════════════════════════
 const KetosisTracker = ({ value = { cows: [], obs: "" }, onChange, readOnly }) => {
   const cows = value.cows || [];
-  const addC = () => onChange({ ...value, cows: [...cows, { id: uid(), num: cows.length + 1, caravana: "", dim: "", metodo: "Leche (BHBA)", resultado: "", positivo: false, nota: "" }] });
+  const [showDetail, setShowDetail] = useState(false); // análisis plegado mientras se carga
+  const addC = (count = 1) => {
+    const nuevos = Array.from({ length: count }, (_, i) => ({ id: uid() + "_" + i, num: cows.length + i + 1, caravana: "", dim: "", metodo: "Leche (BHBA)", resultado: "", positivo: false, nota: "" }));
+    onChange({ ...value, cows: [...cows, ...nuevos] });
+  };
   const updC = (id, f, v) => {
     onChange({ ...value, cows: cows.map(c => {
       if (c.id !== id) return c;
@@ -1466,7 +1482,14 @@ const KetosisTracker = ({ value = { cows: [], obs: "" }, onChange, readOnly }) =
   return (
     <div>
       <p style={{ fontSize: 12, color: C.textLight, margin: "0 0 10px", fontStyle: "italic" }}>Monitoreo cetosis subclínica. BHBA ≥1.2 mmol/L = positivo.</p>
+      {/* Resumen de una línea */}
       {tested > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13, marginBottom: 10 }}>
+          <span style={{ fontWeight: 800, fontSize: 16, color: prevalencia > 15 ? C.danger : prevalencia > 10 ? C.warning : C.success }}>● {prevalencia}%</span>
+          <span style={{ color: C.textLight }}>prevalencia · {tested} testeada{tested > 1 ? "s" : ""} · {positivos} positiva{positivos !== 1 ? "s" : ""}{avgBHBA !== null ? ` · BHBA prom. ${avgBHBA}` : ""}</span>
+        </div>
+      )}
+      {(readOnly || showDetail) && tested > 0 && (
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           <StatB label="Testeadas" val={tested} color={C.text} />
           <StatB label="Positivas" val={positivos} color={positivos > 0 ? C.danger : C.success} />
@@ -1474,7 +1497,7 @@ const KetosisTracker = ({ value = { cows: [], obs: "" }, onChange, readOnly }) =
           <StatB label="BHBA prom." val={avgBHBA} color={avgBHBA >= 1.2 ? C.danger : C.success} unit=" mmol/L" />
         </div>
       )}
-      {prevalencia !== null && (
+      {(readOnly || showDetail) && prevalencia !== null && (
         <div style={{ marginBottom: 14, padding: "8px 12px", borderRadius: 8, fontSize: 13, background: prevalencia > 15 ? C.danger + "15" : prevalencia > 10 ? C.warning + "20" : C.success + "15", color: prevalencia > 15 ? C.danger : prevalencia > 10 ? "#92400e" : C.success, fontWeight: 600 }}>
           {prevalencia > 15 ? "⚠️ Prevalencia alta (>15%). Revisar dieta transición y energía." : prevalencia > 10 ? "⚡ Prevalencia moderada (10-15%). Monitorear." : "✅ Prevalencia dentro de objetivo (<10%)."}
         </div>
@@ -1483,7 +1506,7 @@ const KetosisTracker = ({ value = { cows: [], obs: "" }, onChange, readOnly }) =
         <div style={{ overflowX: "auto", marginBottom: 10 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead><tr style={{ background: C.primary + "10" }}><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600, width: 30 }}>#</th><th style={{ padding: "6px 6px", textAlign: "left", fontWeight: 600 }}>Caravana</th><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600, width: 55 }}>DIM</th><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600, width: 130 }}>Método</th><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600, width: 80 }}>Resultado</th><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600, width: 40 }}>+/−</th><th style={{ padding: "6px 6px", textAlign: "left", fontWeight: 600 }}>Nota</th>{!readOnly && <th style={{ width: 30 }}></th>}</tr></thead>
-            <tbody>{cows.map(cow => (
+            <tbody>{(readOnly || showDetail ? cows : cows.slice(-3)).map(cow => (
               <tr key={cow.id} style={{ borderBottom: `1px solid ${C.borderLight}`, background: cow.positivo ? C.danger + "08" : "transparent" }}>
                 <td style={{ padding: "4px 6px", textAlign: "center", fontSize: 12, color: C.textLight }}>{cow.num}</td>
                 <td style={{ padding: "4px 4px" }}>{readOnly ? cow.caravana || "—" : <input type="text" value={cow.caravana} onChange={e => updC(cow.id, "caravana", e.target.value)} placeholder="ID" style={{ ...inputStyle, padding: "5px 6px", fontSize: 13 }} />}</td>
@@ -1498,7 +1521,13 @@ const KetosisTracker = ({ value = { cows: [], obs: "" }, onChange, readOnly }) =
           </table>
         </div>
       )}
-      {!readOnly && <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" size="sm" icon="plus" onClick={addC}>Agregar vaca</Btn><Btn variant="ghost" size="sm" onClick={() => { for (let i = 0; i < 5; i++) addC(); }}>+5 vacas</Btn></div>}
+      {!readOnly && cows.length > 0 && (
+        <button onClick={() => setShowDetail(s => !s)}
+          style={{ background: "none", border: "none", color: C.primary, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: ff, padding: "2px 0", marginBottom: 10, display: "block" }}>
+          {showDetail ? "▴ Ocultar detalle y análisis" : `▾ Ver todas las vacas (${cows.length}) y análisis`}
+        </button>
+      )}
+      {!readOnly && <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" size="sm" icon="plus" onClick={() => addC(1)}>Agregar vaca</Btn><Btn variant="ghost" size="sm" onClick={() => addC(5)}>+5 vacas</Btn></div>}
       <div style={{ marginTop: 12 }}>
         <label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Protocolo de monitoreo y observaciones</label>
         {readOnly ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, fontSize: 14, border: `1px solid ${C.borderLight}`, whiteSpace: "pre-wrap" }}>{value.obs || "—"}</div>
@@ -1580,7 +1609,10 @@ const DiseaseTracker = ({ value = {}, onChange, readOnly }) => {
 // ═══════════════════════════════════════════════════
 const BeddingEval = ({ value = { points: [], obs: "" }, onChange, readOnly }) => {
   const pts = value.points || [];
-  const addPt = () => onChange({ ...value, points: [...pts, { id: uid(), num: pts.length + 1, ubicacion: "", temp_sup: "", temp_prof: "", hum_sup: "", hum_prof: "", profundidad: "" }] });
+  const addPt = (count = 1) => {
+    const nuevos = Array.from({ length: count }, (_, i) => ({ id: uid() + "_" + i, num: pts.length + i + 1, ubicacion: "", temp_sup: "", temp_prof: "", hum_sup: "", hum_prof: "", profundidad: "" }));
+    onChange({ ...value, points: [...pts, ...nuevos] });
+  };
   const updPt = (id, f, v) => onChange({ ...value, points: pts.map(p => p.id === id ? { ...p, [f]: v } : p) });
   const remPt = (id) => onChange({ ...value, points: pts.filter(p => p.id !== id).map((p, i) => ({ ...p, num: i + 1 })) });
 
@@ -1642,7 +1674,7 @@ const BeddingEval = ({ value = { points: [], obs: "" }, onChange, readOnly }) =>
           </table>
         </div>
       )}
-      {!readOnly && <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" size="sm" icon="plus" onClick={addPt}>Agregar punto</Btn><Btn variant="ghost" size="sm" onClick={() => { for (let i = 0; i < 5; i++) addPt(); }}>+5 puntos</Btn></div>}
+      {!readOnly && <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" size="sm" icon="plus" onClick={() => addPt(1)}>Agregar punto</Btn><Btn variant="ghost" size="sm" onClick={() => addPt(5)}>+5 puntos</Btn></div>}
       <div style={{ marginTop: 12 }}><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Observaciones</label>{readOnly ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, border: `1px solid ${C.borderLight}`, whiteSpace: "pre-wrap" }}>{value.obs || "—"}</div> : <textarea value={value.obs || ""} onChange={e => onChange({ ...value, obs: e.target.value })} placeholder="Zonas calientes, compactación, uniformidad..." style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} />}</div>
     </div>
   );
@@ -1653,7 +1685,11 @@ const BeddingEval = ({ value = { points: [], obs: "" }, onChange, readOnly }) =>
 // ═══════════════════════════════════════════════════
 const CleanlinessScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly }) => {
   const cows = value.cows || [];
-  const addC = () => onChange({ ...value, cows: [...cows, { id: uid(), num: cows.length + 1, caravana: "", ubre: "", patas: "", flanco: "" }] });
+  const [showDetail, setShowDetail] = useState(false); // análisis plegado mientras se carga
+  const addC = (count = 1) => {
+    const nuevos = Array.from({ length: count }, (_, i) => ({ id: uid() + "_" + i, num: cows.length + i + 1, caravana: "", ubre: "", patas: "", flanco: "" }));
+    onChange({ ...value, cows: [...cows, ...nuevos] });
+  };
   const updC = (id, f, v) => onChange({ ...value, cows: cows.map(c => c.id === id ? { ...c, [f]: v } : c) });
   const remC = (id) => onChange({ ...value, cows: cows.filter(c => c.id !== id).map((c, i) => ({ ...c, num: i + 1 })) });
 
@@ -1675,7 +1711,14 @@ const CleanlinessScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly 
   return (
     <div>
       <p style={{ fontSize: 12, color: C.textLight, margin: "0 0 10px", fontStyle: "italic" }}>Puntaje limpieza 1-5 (1=limpio, 5=muy sucio). Muestra ~20 vacas/lote. Objetivo: &lt;15% con score ≥3.</p>
-      {n >= 3 && (
+      {/* Resumen de una línea */}
+      {n > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13, marginBottom: 10 }}>
+          <span style={{ fontWeight: 800, fontSize: 16, color: clnColor(pct3(ubreS)) }}>● {pct3(ubreS) ?? "—"}%</span>
+          <span style={{ color: C.textLight }}>ubre ≥3 · patas {pct3(patasS) ?? "—"}% · flanco {pct3(flancoS) ?? "—"}% · {n} vaca{n > 1 ? "s" : ""}</span>
+        </div>
+      )}
+      {(readOnly || showDetail) && n >= 3 && (
         <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
           <StatB label="Prom. ubre" val={avg2(ubreS)} color={avg2(ubreS) >= 3 ? C.danger : C.success} />
           <StatB label="% ubre ≥3" val={pct3(ubreS)} color={clnColor(pct3(ubreS))} unit="%" />
@@ -1690,7 +1733,7 @@ const CleanlinessScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly 
         <div style={{ overflowX: "auto", marginBottom: 10 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead><tr style={{ background: C.primary + "10" }}><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600, width: 30 }}>#</th><th style={{ padding: "6px 6px", textAlign: "left", fontWeight: 600 }}>Caravana</th><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600 }}>Ubre (1-5)</th><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600 }}>Patas (1-5)</th><th style={{ padding: "6px 6px", textAlign: "center", fontWeight: 600 }}>Flanco (1-5)</th>{!readOnly && <th style={{ width: 28 }}></th>}</tr></thead>
-            <tbody>{cows.map(cow => (
+            <tbody>{(readOnly || showDetail ? cows : cows.slice(-3)).map(cow => (
               <tr key={cow.id} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
                 <td style={{ padding: "4px 6px", textAlign: "center", color: C.textLight, fontSize: 12 }}>{cow.num}</td>
                 <td style={{ padding: "4px 4px" }}>{readOnly ? cow.caravana || "—" : <input type="text" value={cow.caravana} onChange={e => updC(cow.id, "caravana", e.target.value)} placeholder="ID" style={{ ...inputStyle, padding: "5px 6px", fontSize: 13 }} />}</td>
@@ -1706,7 +1749,13 @@ const CleanlinessScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly 
           </table>
         </div>
       )}
-      {!readOnly && <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" size="sm" icon="plus" onClick={addC}>Agregar vaca</Btn><Btn variant="ghost" size="sm" onClick={() => { for (let i = 0; i < 10; i++) addC(); }}>+10 vacas</Btn></div>}
+      {!readOnly && cows.length > 0 && (
+        <button onClick={() => setShowDetail(s => !s)}
+          style={{ background: "none", border: "none", color: C.primary, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: ff, padding: "2px 0", marginBottom: 10, display: "block" }}>
+          {showDetail ? "▴ Ocultar detalle y análisis" : `▾ Ver todas las vacas (${cows.length}) y análisis`}
+        </button>
+      )}
+      {!readOnly && <div style={{ display: "flex", gap: 8 }}><Btn variant="outline" size="sm" icon="plus" onClick={() => addC(1)}>Agregar vaca</Btn><Btn variant="ghost" size="sm" onClick={() => addC(10)}>+10 vacas</Btn></div>}
       <div style={{ marginTop: 12 }}><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Observaciones limpieza</label>{readOnly ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, border: `1px solid ${C.borderLight}`, whiteSpace: "pre-wrap" }}>{value.obs || "—"}</div> : <textarea value={value.obs || ""} onChange={e => onChange({ ...value, obs: e.target.value })} placeholder="Relación con camas, barro, problemas..." style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} />}</div>
     </div>
   );
