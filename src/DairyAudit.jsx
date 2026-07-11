@@ -1040,6 +1040,7 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
   };
   const cfg = configs[scoreType];
   const cows = value.cows || [];
+  const [showDetail, setShowDetail] = useState(false); // análisis plegado mientras se carga
 
   const addCow = (count = 1) => {
     const nuevos = Array.from({ length: count }, (_, i) => ({ id: uid() + "_" + i, num: cows.length + i + 1, caravana: "", score: "", nota: "" }));
@@ -1094,12 +1095,123 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
     </div>
   );
 
+  // Tabla de vacas (completa o solo las últimas cargadas)
+  const renderTable = (list) => (
+    <div style={{ overflowX: "auto", marginBottom: 10 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: C.primary + "10" }}>
+            <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 36 }}>#</th>
+            <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>Caravana / ID</th>
+            <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 90 }}>{cfg.label}</th>
+            <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>Nota</th>
+            {!readOnly && <th style={{ width: 32 }}></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(cow => {
+            const sv = parseFloat(cow.score);
+            const inTarget = !isNaN(sv) && sv >= cfg.target[0] && sv <= cfg.target[1];
+            return (
+              <tr key={cow.id} style={{ borderBottom: `1px solid ${C.borderLight}`, background: !isNaN(sv) && !inTarget ? C.accent + "08" : "transparent" }}>
+                <td style={{ padding: "4px 8px", textAlign: "center", color: C.textLight, fontSize: 12 }}>{cow.num}</td>
+                <td style={{ padding: "4px 4px" }}>
+                  {readOnly ? <span>{cow.caravana || "—"}</span>
+                    : <input type="text" value={cow.caravana} onChange={e => updateCow(cow.id, "caravana", e.target.value)} placeholder="N° caravana" style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />}
+                </td>
+                <td style={{ padding: "4px 4px", textAlign: "center" }}>
+                  {readOnly ? <span style={{ fontWeight: 700, color: inTarget ? C.success : C.accent }}>{cow.score || "—"}</span>
+                    : <input type="number" min={cfg.min} max={cfg.max} step={cfg.step} value={cow.score} onChange={e => updateCow(cow.id, "score", e.target.value)} placeholder={cfg.label} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, textAlign: "center", width: 80, fontWeight: 700, color: !isNaN(sv) ? (inTarget ? C.success : C.accent) : C.text }} />}
+                </td>
+                <td style={{ padding: "4px 4px" }}>
+                  {readOnly ? <span style={{ fontSize: 12 }}>{cow.nota || "—"}</span>
+                    : <input type="text" value={cow.nota || ""} onChange={e => updateCow(cow.id, "nota", e.target.value)} placeholder="Obs..." style={{ ...inputStyle, padding: "5px 8px", fontSize: 12 }} />}
+                </td>
+                {!readOnly && (
+                  <td style={{ padding: "4px 4px" }}>
+                    <button onClick={() => removeCow(cow.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}><Icon name="x" size={14} color={C.danger} /></button>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div>
       <p style={{ fontSize: 12, color: C.textLight, margin: "0 0 10px", fontStyle: "italic" }}>{cfg.desc}</p>
 
-      {/* Stats summary */}
-      {n > 0 && (
+      {/* ── MODO CARGA: primero la botonera, el análisis queda plegado ── */}
+      {!readOnly && (
+        <>
+          {/* Carga rápida */}
+          <div style={{ background: C.bg, border: `1.5px dashed ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.textLight, textTransform: "uppercase", letterSpacing: 0.5 }}>⚡ Tocá el score y se agrega la vaca</span>
+              {cows.length > 0 && (
+                <button onClick={undoLast} style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: ff, padding: 0 }}>
+                  ↩ Deshacer última
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {quickValues.map(v => {
+                const inTargetQ = v >= cfg.target[0] && v <= cfg.target[1];
+                const count = scores.filter(s => s === v).length;
+                return (
+                  <button key={v} onClick={() => quickAdd(v)}
+                    style={{
+                      position: "relative", minWidth: 52, padding: "10px 6px", borderRadius: 10,
+                      border: `2px solid ${inTargetQ ? C.success : C.border}`,
+                      background: inTargetQ ? C.success + "10" : C.card,
+                      color: inTargetQ ? C.success : C.text,
+                      fontSize: 15, fontWeight: 800, fontFamily: ff, cursor: "pointer",
+                    }}>
+                    {v}
+                    {count > 0 && (
+                      <span style={{ position: "absolute", top: -7, right: -7, background: C.primary, color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Resumen en una línea */}
+          {n > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13, marginBottom: 10 }}>
+              <span style={{ fontWeight: 800, fontSize: 16, color: avg >= cfg.target[0] && avg <= cfg.target[1] ? C.success : C.danger }}>● {avg}</span>
+              <span style={{ color: C.textLight }}>promedio · {n} vaca{n > 1 ? "s" : ""} · {outOfTarget}% fuera de objetivo ({cfg.target[0]}–{cfg.target[1]})</span>
+            </div>
+          )}
+
+          {/* Últimas cargadas: para anotar caravana/nota de la vaca problema */}
+          {cows.length > 0 && !showDetail && (
+            <>
+              {cows.length > 3 && <div style={{ fontSize: 11, color: C.textLight, marginBottom: 4 }}>Últimas 3 cargadas (de {cows.length}):</div>}
+              {renderTable(cows.slice(-3))}
+            </>
+          )}
+          {cows.length > 0 && (
+            <button onClick={() => setShowDetail(s => !s)}
+              style={{ background: "none", border: "none", color: C.primary, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: ff, padding: "2px 0", marginBottom: 10, display: "block" }}>
+              {showDetail ? "▴ Ocultar detalle y análisis" : `▾ Ver todas las vacas (${cows.length}) y análisis`}
+            </button>
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="outline" size="sm" icon="plus" onClick={() => addCow(1)}>Agregar vaca vacía</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => addCow(5)}>+5 vacas</Btn>
+          </div>
+        </>
+      )}
+
+      {/* ── ANÁLISIS: visible en modo lectura, o al desplegar en modo carga ── */}
+      {(readOnly || showDetail) && n > 0 && (
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           <StatBox label="Promedio" val={avg} />
           <StatBox label="Mínimo" val={min} color={C.accent} />
@@ -1111,7 +1223,7 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
       )}
 
       {/* Distribution bar */}
-      {n >= 3 && (
+      {(readOnly || showDetail) && n >= 3 && (
         <div style={{ marginBottom: 14, padding: 10, background: C.bg, borderRadius: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: C.textLight }}>Distribución de scores</div>
           <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 50 }}>
@@ -1135,96 +1247,8 @@ const CowScoring = ({ value = { cows: [], obs: "" }, onChange, readOnly, scoreTy
         </div>
       )}
 
-      {/* Cow table */}
-      {cows.length > 0 && (
-        <div style={{ overflowX: "auto", marginBottom: 10 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: C.primary + "10" }}>
-                <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 36 }}>#</th>
-                <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>Caravana / ID</th>
-                <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600, width: 90 }}>{cfg.label}</th>
-                <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>Nota</th>
-                {!readOnly && <th style={{ width: 32 }}></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {cows.map(cow => {
-                const sv = parseFloat(cow.score);
-                const inTarget = !isNaN(sv) && sv >= cfg.target[0] && sv <= cfg.target[1];
-                return (
-                  <tr key={cow.id} style={{ borderBottom: `1px solid ${C.borderLight}`, background: !isNaN(sv) && !inTarget ? C.accent + "08" : "transparent" }}>
-                    <td style={{ padding: "4px 8px", textAlign: "center", color: C.textLight, fontSize: 12 }}>{cow.num}</td>
-                    <td style={{ padding: "4px 4px" }}>
-                      {readOnly ? <span>{cow.caravana || "—"}</span>
-                        : <input type="text" value={cow.caravana} onChange={e => updateCow(cow.id, "caravana", e.target.value)} placeholder="N° caravana" style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />}
-                    </td>
-                    <td style={{ padding: "4px 4px", textAlign: "center" }}>
-                      {readOnly ? <span style={{ fontWeight: 700, color: inTarget ? C.success : C.accent }}>{cow.score || "—"}</span>
-                        : <input type="number" min={cfg.min} max={cfg.max} step={cfg.step} value={cow.score} onChange={e => updateCow(cow.id, "score", e.target.value)} placeholder={cfg.label} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, textAlign: "center", width: 80, fontWeight: 700, color: !isNaN(sv) ? (inTarget ? C.success : C.accent) : C.text }} />}
-                    </td>
-                    <td style={{ padding: "4px 4px" }}>
-                      {readOnly ? <span style={{ fontSize: 12 }}>{cow.nota || "—"}</span>
-                        : <input type="text" value={cow.nota || ""} onChange={e => updateCow(cow.id, "nota", e.target.value)} placeholder="Obs..." style={{ ...inputStyle, padding: "5px 8px", fontSize: 12 }} />}
-                    </td>
-                    {!readOnly && (
-                      <td style={{ padding: "4px 4px" }}>
-                        <button onClick={() => removeCow(cow.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}><Icon name="x" size={14} color={C.danger} /></button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {!readOnly && (
-        <>
-          {/* ── Carga rápida: un toque = una vaca con ese score ── */}
-          <div style={{ background: C.bg, border: `1.5px dashed ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.textLight, textTransform: "uppercase", letterSpacing: 0.5 }}>⚡ Carga rápida — tocá el score y se agrega la vaca</span>
-              {cows.length > 0 && (
-                <button onClick={undoLast} style={{ background: "none", border: "none", color: C.danger, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: ff, padding: 0 }}>
-                  ↩ Deshacer última
-                </button>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {quickValues.map(v => {
-                const inTarget = v >= cfg.target[0] && v <= cfg.target[1];
-                const count = scores.filter(s => s === v).length;
-                return (
-                  <button key={v} onClick={() => quickAdd(v)}
-                    style={{
-                      position: "relative", minWidth: 52, padding: "10px 6px", borderRadius: 10,
-                      border: `2px solid ${inTarget ? C.success : C.border}`,
-                      background: inTarget ? C.success + "10" : C.card,
-                      color: inTarget ? C.success : C.text,
-                      fontSize: 15, fontWeight: 800, fontFamily: ff, cursor: "pointer",
-                    }}>
-                    {v}
-                    {count > 0 && (
-                      <span style={{ position: "absolute", top: -7, right: -7, background: C.primary, color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: 11, color: C.textLight, margin: "8px 0 0", fontStyle: "italic" }}>
-              La caravana es opcional: completala en la tabla solo para las vacas que quieras identificar (ej. las problema).
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="outline" size="sm" icon="plus" onClick={() => addCow(1)}>Agregar vaca vacía</Btn>
-            <Btn variant="ghost" size="sm" onClick={() => addCow(5)}>+5 vacas</Btn>
-          </div>
-        </>
-      )}
+      {/* Tabla completa de vacas */}
+      {(readOnly || showDetail) && cows.length > 0 && renderTable(cows)}
 
       {/* Observations */}
       <div style={{ marginTop: 12 }}>
@@ -5586,15 +5610,19 @@ const fetchVisits = async (clientId) => {
                   }
                   if (!chips.length) return null;
                   return (
-                    <div style={{ background: "#f0f4ff", border: `1px solid ${C.primary}25`, borderRadius: 8, padding: "8px 12px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>vs {fmt(prevVisit.fecha)}</span>
-                      {chips.slice(0, 6).map((ch, i) => (
-                        <span key={i} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 10, background: ch.curr ? (ch.col + "15") : C.borderLight, color: ch.curr ? ch.col : C.textLight, fontWeight: ch.curr ? 600 : 400 }}>
-                          {ch.label}: {ch.prev}
-                          {ch.curr && <> → {ch.curr} <span style={{ fontWeight: 700 }}>{ch.icon}{ch.delta}</span></>}
-                        </span>
-                      ))}
-                    </div>
+                    <details style={{ background: "#f0f4ff", border: `1px solid ${C.primary}25`, borderRadius: 8, padding: "8px 12px" }}>
+                      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700, color: C.primary, userSelect: "none" }}>
+                        📊 Comparar con la visita anterior ({fmt(prevVisit.fecha)})
+                      </summary>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                        {chips.slice(0, 6).map((ch, i) => (
+                          <span key={i} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 10, background: ch.curr ? (ch.col + "15") : C.borderLight, color: ch.curr ? ch.col : C.textLight, fontWeight: ch.curr ? 600 : 400 }}>
+                            {ch.label}: {ch.prev}
+                            {ch.curr && <> → {ch.curr} <span style={{ fontWeight: 700 }}>{ch.icon}{ch.delta}</span></>}
+                          </span>
+                        ))}
+                      </div>
+                    </details>
                   );
                 })()}
                 {/* Custom components */}
