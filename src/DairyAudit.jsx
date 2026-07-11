@@ -2103,18 +2103,200 @@ const PRODUCCION_SECTIONS = [
   },
 ];
 
+// ═══════════════════════════════════════════════════
+// GUACHERA — terneras lactantes
+// ═══════════════════════════════════════════════════
+const GUACHERA_SECTIONS = [
+  {
+    id: "ga_calostro", title: "1. Encalostrado", subtitle: "Cantidad, calidad y oportunidad del calostro",
+    fields: [
+      { id: "ga_cal_pct_6h", label: "% terneras con calostro en <6 h", type: "number", placeholder: "Ej: 85", unit: "%" },
+      { id: "ga_cal_litros", label: "Litros en la primera toma", type: "number", step: "0.5", placeholder: "Ej: 4", unit: "lt" },
+      { id: "ga_cal_metodo", label: "Método de suministro", type: "select", options: ["Mamadera", "Sonda esofágica", "Mama directo", "Mixto"] },
+      { id: "ga_cal_calidad", label: "¿Se mide calidad del calostro?", type: "select", options: ["Brix", "Calostrómetro", "No se mide"] },
+      { id: "ga_cal_brix", label: "Brix promedio (si se mide)", type: "number", step: "0.5", placeholder: "Ej: 23", unit: "%" },
+      { id: "ga_cal_obs", label: "Observaciones encalostrado", type: "textarea", placeholder: "Rutina, refrigeración/banco de calostro, quién lo hace..." },
+    ],
+  },
+  {
+    id: "ga_leche", title: "2. Alimentación láctea y sólida", subtitle: "Leche/sustituto, iniciador y agua",
+    fields: [
+      { id: "ga_le_litros", label: "Litros de leche por día", type: "number", step: "0.5", placeholder: "Ej: 6", unit: "lt" },
+      { id: "ga_le_tomas", label: "Número de tomas", type: "select", options: ["1", "2", "3", "Libre (ad libitum)"] },
+      { id: "ga_le_tipo", label: "Tipo", type: "select", options: ["Leche entera", "Sustituto lácteo", "Mixto", "Leche de descarte"] },
+      { id: "ga_le_iniciador", label: "Consumo de iniciador estimado", type: "number", placeholder: "Ej: 400", unit: "g/día" },
+      { id: "ga_le_agua", label: "Agua limpia disponible", type: "select", options: ["Siempre", "Parcial", "No"] },
+      { id: "ga_le_obs", label: "Observaciones alimentación", type: "textarea", placeholder: "Temperatura de entrega, higiene de mamaderas/baldes..." },
+    ],
+  },
+  {
+    id: "ga_salud", title: "3. Salud", subtitle: "Diarreas, neumonías y mortandad",
+    fields: [
+      { id: "ga_sa_diarreas", label: "% con diarrea (objetivo <15%)", type: "number", placeholder: "Ej: 10", unit: "%" },
+      { id: "ga_sa_neumonias", label: "% con neumonía (objetivo <10%)", type: "number", placeholder: "Ej: 5", unit: "%" },
+      { id: "ga_sa_mortandad", label: "Mortandad del período (objetivo <5%)", type: "number", placeholder: "Ej: 3", unit: "%" },
+      { id: "ga_sa_protocolo", label: "Protocolo ante diarreas", type: "textarea", placeholder: "Hidratación, cuándo antibiótico, registros..." },
+    ],
+  },
+  {
+    id: "ga_instalaciones", title: "4. Instalaciones y confort", subtitle: "Alojamiento, cama e higiene",
+    fields: [
+      { id: "ga_in_sistema", label: "Sistema de crianza", type: "select", options: ["Estaca", "Jaula individual", "Grupal", "Mixto"] },
+      { id: "ga_in_cama", label: "Cama seca y limpia", type: "select", options: ["Sí", "Parcial", "No"] },
+      { id: "ga_in_reparo", label: "Sombra / reparo de lluvia y viento", type: "select", options: ["Adecuado", "Parcial", "Inadecuado"] },
+      { id: "ga_in_higiene", label: "Higiene de utensilios (baldes/mamaderas)", type: "select", options: ["Buena", "Regular", "Mala"] },
+      { id: "ga_in_obs", label: "Observaciones instalaciones", type: "textarea", placeholder: "Densidad, barro, orientación..." },
+    ],
+  },
+  {
+    id: "ga_crecimiento", title: "5. Crecimiento y desleche", subtitle: "Pesos y ganancia diaria",
+    fields: [
+      { id: "ga_cr_peso_nac", label: "Peso promedio al nacer", type: "number", placeholder: "Ej: 38", unit: "kg" },
+      { id: "ga_cr_peso_desl", label: "Peso promedio al desleche (objetivo: duplicar nacimiento)", type: "number", placeholder: "Ej: 76", unit: "kg" },
+      { id: "ga_cr_edad_desl", label: "Edad al desleche", type: "number", placeholder: "Ej: 60", unit: "días" },
+      { id: "ga_cr_gdp", label: "Ganancia diaria estimada (objetivo >650)", type: "number", placeholder: "Ej: 700", unit: "g/día" },
+    ],
+  },
+  {
+    id: "ga_plan", title: "6. Observaciones y plan", subtitle: "Síntesis de guachera",
+    fields: [
+      { id: "ga_hallazgos", label: "Hallazgos principales", type: "textarea", rows: 4, placeholder: "Lo más relevante de la recorrida por guachera..." },
+    ],
+  },
+];
+
+// ═══════════════════════════════════════════════════
+// RECRÍA — desleche a primer parto
+// ═══════════════════════════════════════════════════
+const RECRIA_SECTIONS = [
+  {
+    id: "rc_crecimiento", title: "1. Peso y desarrollo", subtitle: "Contra curva objetivo por edad",
+    fields: [
+      { id: "rc_cr_lote", label: "Lote evaluado", type: "select", options: ["Desleche a 6 meses", "6 a 12 meses", "12 meses a servicio", "Preñadas"] },
+      { id: "rc_cr_peso", label: "Peso promedio", type: "number", placeholder: "Ej: 210", unit: "kg" },
+      { id: "rc_cr_altura", label: "Altura a la cruz promedio", type: "number", placeholder: "Ej: 115", unit: "cm" },
+      { id: "rc_cr_pct_adulto", label: "% del peso adulto (obj: 55-60% al servicio, 85% al parto)", type: "number", placeholder: "Ej: 56", unit: "%" },
+      { id: "rc_cr_gdp", label: "Ganancia diaria (objetivo 700-800)", type: "number", placeholder: "Ej: 750", unit: "g/día" },
+      { id: "rc_cr_obs", label: "Observaciones crecimiento", type: "textarea", placeholder: "Uniformidad del lote, animales retrasados..." },
+    ],
+  },
+  {
+    id: "rc_dieta", title: "2. Alimentación", subtitle: "Base forrajera y suplementación",
+    fields: [
+      { id: "rc_di_base", label: "Base forrajera", type: "select", options: ["Pastura", "Campo natural", "Silo", "Verdeo", "Mixta"] },
+      { id: "rc_di_suplemento", label: "Suplemento", type: "number", step: "0.5", placeholder: "Ej: 2", unit: "kg/día" },
+      { id: "rc_di_proteina", label: "% proteína de la dieta (obj. 14-16%)", type: "number", step: "0.5", placeholder: "Ej: 15", unit: "%" },
+      { id: "rc_di_minerales", label: "Suplementación mineral", type: "select", options: ["Sí, adecuada", "Sí, revisar", "No"] },
+      { id: "rc_di_obs", label: "Observaciones dieta", type: "textarea", placeholder: "Asignación, calidad de pastura, restricciones..." },
+    ],
+  },
+  {
+    id: "rc_sanidad", title: "3. Sanidad", subtitle: "Vacunas, parásitos y cojeras",
+    fields: [
+      { id: "rc_sa_vacunas", label: "Plan vacunal al día", type: "select", options: ["Sí", "Parcial", "No", "Sin plan escrito"] },
+      { id: "rc_sa_parasitos", label: "Control de parásitos", type: "select", options: ["Reciente (<3 meses)", "Atrasado", "No se hace", "Con HPG"] },
+      { id: "rc_sa_cojeras", label: "% con cojera visible", type: "number", placeholder: "Ej: 2", unit: "%" },
+      { id: "rc_sa_obs", label: "Observaciones sanidad", type: "textarea", placeholder: "Historial de neumonías, queratoconjuntivitis..." },
+    ],
+  },
+  {
+    id: "rc_ambiente", title: "4. Agua, sombra y espacio", subtitle: "Confort del lote",
+    fields: [
+      { id: "rc_am_agua", label: "Agua (calidad y acceso)", type: "select", options: ["Buena", "Regular", "Mala"] },
+      { id: "rc_am_sombra", label: "Sombra disponible", type: "select", options: ["Adecuada", "Parcial", "Sin sombra"] },
+      { id: "rc_am_comedero", label: "Espacio de comedero", type: "number", placeholder: "Ej: 45", unit: "cm/animal" },
+      { id: "rc_am_obs", label: "Observaciones ambiente", type: "textarea", placeholder: "Barro, callejones, densidad..." },
+    ],
+  },
+  {
+    id: "rc_reproduccion", title: "5. Recría a servicio", subtitle: "Edad, peso y preñez",
+    fields: [
+      { id: "rc_re_edad_serv", label: "Edad al primer servicio (obj. 13-15)", type: "number", placeholder: "Ej: 14", unit: "meses" },
+      { id: "rc_re_peso_serv", label: "Peso al servicio", type: "number", placeholder: "Ej: 340", unit: "kg" },
+      { id: "rc_re_prenez", label: "% preñez del lote de servicio", type: "number", placeholder: "Ej: 75", unit: "%" },
+      { id: "rc_re_obs", label: "Observaciones reproducción", type: "textarea", placeholder: "Criterio de entrada a servicio, toros/IA..." },
+    ],
+  },
+  {
+    id: "rc_plan", title: "6. Observaciones y plan", subtitle: "Síntesis de recría",
+    fields: [
+      { id: "rc_hallazgos", label: "Hallazgos principales", type: "textarea", rows: 4, placeholder: "Lo más relevante de la recorrida por recría..." },
+    ],
+  },
+];
+
+// ═══════════════════════════════════════════════════
+// ORDEÑE — rutina y calidad de leche
+// ═══════════════════════════════════════════════════
+const ORDENE_SECTIONS = [
+  {
+    id: "or_rutina", title: "1. Rutina de ordeñe", subtitle: "Observar un ordeñe completo",
+    fields: [
+      { id: "or_ru_predip", label: "Pre-dipping", type: "select", options: ["Sí, correcto", "Sí, irregular", "No"] },
+      { id: "or_ru_secado", label: "Secado de pezones", type: "select", options: ["Toalla individual", "Papel", "Trapo común", "No se seca"] },
+      { id: "or_ru_postdip", label: "Post-dipping", type: "select", options: ["Sí, cobertura completa", "Sí, parcial", "No"] },
+      { id: "or_ru_guantes", label: "Uso de guantes", type: "select", options: ["Sí", "A veces", "No"] },
+      { id: "or_ru_calma", label: "Ingreso de vacas (calma/flujo)", type: "select", options: ["Tranquilo", "Con gritos/perros", "Desordenado"] },
+      { id: "or_ru_obs", label: "Observaciones rutina", type: "textarea", placeholder: "Tiempos, sobreordeñe, orden de ordeñe de enfermas..." },
+    ],
+  },
+  {
+    id: "or_pezones", title: "2. Condición de pezones", subtitle: "Evaluar ~20 vacas post-ordeñe",
+    fields: [
+      { id: "or_pe_hiper", label: "% con hiperqueratosis (obj. <20%)", type: "number", placeholder: "Ej: 15", unit: "%" },
+      { id: "or_pe_congestion", label: "% con congestión/anillos (obj. <10%)", type: "number", placeholder: "Ej: 5", unit: "%" },
+      { id: "or_pe_obs", label: "Observaciones pezones", type: "textarea", placeholder: "Relación con pulsado/pezoneras/sobreordeñe..." },
+    ],
+  },
+  {
+    id: "or_equipo", title: "3. Equipo de ordeñe", subtitle: "Mantenimiento y funcionamiento",
+    fields: [
+      { id: "or_eq_revision", label: "Última revisión técnica del equipo", type: "select", options: ["<6 meses", "6-12 meses", ">12 meses", "No se revisa"] },
+      { id: "or_eq_pezoneras", label: "Pezoneras dentro de vida útil", type: "select", options: ["Sí", "Vencidas", "No se sabe"] },
+      { id: "or_eq_vacio", label: "Vacío estable durante el ordeñe", type: "select", options: ["Sí", "Fluctúa", "No medido"] },
+      { id: "or_eq_obs", label: "Observaciones equipo", type: "textarea", placeholder: "Ruidos, entrada de aire, lavado..." },
+    ],
+  },
+  {
+    id: "or_calidad", title: "4. Calidad de leche", subtitle: "Del remito / laboratorio",
+    fields: [
+      { id: "or_ca_ccs", label: "CCS de tanque (obj. <250)", type: "number", placeholder: "Ej: 220", unit: "x1000 cél/ml" },
+      { id: "or_ca_ufc", label: "UFC (obj. <50)", type: "number", placeholder: "Ej: 30", unit: "x1000/ml" },
+      { id: "or_ca_mastitis", label: "Casos de mastitis clínica del mes (obj. <2% del rodeo)", type: "number", placeholder: "Ej: 3", unit: "casos" },
+      { id: "or_ca_cronicas", label: "Vacas crónicas identificadas", type: "number", placeholder: "Ej: 4", unit: "vacas" },
+      { id: "or_ca_obs", label: "Observaciones calidad", type: "textarea", placeholder: "Tendencia de CCS, protocolo de secado, cultivos..." },
+    ],
+  },
+  {
+    id: "or_plan", title: "5. Observaciones y plan", subtitle: "Síntesis de ordeñe",
+    fields: [
+      { id: "or_hallazgos", label: "Hallazgos principales", type: "textarea", rows: 4, placeholder: "Lo más relevante del ordeñe observado..." },
+    ],
+  },
+];
+
 const CATEGORIES = [
+  // Ordenadas según etapa productiva del tambo
+  { id: "guachera", name: "Guachera", icon: "cow", color: "#B45309", sections: GUACHERA_SECTIONS },
+  { id: "recria", name: "Recría", icon: "chart", color: "#65A30D", sections: RECRIA_SECTIONS },
   { id: "preparto", name: "Preparto", icon: "cow", color: "#2D6A4F", sections: PREPARTO_SECTIONS },
   { id: "frescas", name: "Frescas (0-60 DIM)", icon: "chart", color: "#E76F51", sections: FRESCAS_SECTIONS },
   { id: "produccion", name: "Vacas en Producción", icon: "layers", color: "#0077B6", sections: PRODUCCION_SECTIONS },
+  { id: "ordene", name: "Ordeñe / Calidad de leche", icon: "layers", color: "#0E7490", sections: ORDENE_SECTIONS },
   { id: "calidad_cama", name: "Calidad de Cama", icon: "thermo", color: "#7C3AED", sections: CALIDAD_CAMA_SECTIONS },
   { id: "calidad_alimento", name: "Calidad Alimento / Grano", icon: "layers", color: "#0891B2", sections: CALIDAD_ALIMENTO_SECTIONS },
   { id: "estres_calorico", name: "Verano / Estrés Calórico", icon: "sun", color: "#DC2626", sections: ESTRES_CALORICO_SECTIONS },
 ];
 
+// Áreas que se activan por defecto en un tambo nuevo
+const DEFAULT_AREAS = ["preparto", "frescas", "produccion"];
+
 // Secciones esenciales por módulo — preset "Visita rápida"
 // (lo que se mide SIEMPRE para mantener tendencias comparables entre visitas)
 const CORE_SECTIONS = {
+  guachera: ["ga_leche", "ga_salud", "ga_plan"],
+  recria: ["rc_crecimiento", "rc_dieta", "rc_plan"],
+  ordene: ["or_rutina", "or_calidad", "or_plan"],
   preparto: ["cms", "ph", "bcs", "heces", "llenado_ruminal", "observaciones_finales"],
   frescas: ["fr_cetosis", "fr_dmi", "fr_produccion", "fr_bcs", "fr_heces", "fr_rumen", "fr_plan"],
   produccion: ["vp_bcs", "vp_heces", "vp_general", "vp_plan"],
@@ -3946,6 +4128,8 @@ export default function DairyAuditApp() {
   const isMobile = useIsMobile();                        // layout compacto en celular
   const isOnline = useOnline();                          // estado de conexión
   const [pendingSync, setPendingSync] = useState(0);     // visitas en cola offline por sincronizar
+  const [histArea, setHistArea] = useState(null);        // filtro de historial por área (null = todas)
+  const [showAreaConfig, setShowAreaConfig] = useState(false); // panel de configuración de áreas del tambo
 
   // Clave única de borrador por usuario/cliente/módulo
   const draftKey = user && selClient && selCat
@@ -4124,6 +4308,12 @@ const discardDraft = () => {
   if (draftKey) { try { localStorage.removeItem(draftKey); } catch (_) {} }
   setDraftBanner(false);
 };
+
+// Al cambiar de cliente, resetear filtro de historial y panel de áreas
+useEffect(() => {
+  setHistArea(null);
+  setShowAreaConfig(false);
+}, [selClient?.id]); // eslint-disable-line
 
 // ── Auto-save del formulario de cliente (nuevo o edición) ──
 useEffect(() => {
@@ -4567,11 +4757,39 @@ useEffect(() => {
   return () => { window.removeEventListener("online", h); clearInterval(t); };
 }, [user]);
 
+// ── Áreas del tambo: cuáles tiene este cliente y qué variables se miden en cada una ──
+const getAreasConfig = (client) => {
+  const cfg = client?.areas_config || {};
+  // Si nunca se configuró: áreas por defecto + las que ya tienen visitas
+  const visitadas = [...new Set(visits.filter(v => client && v.client_id === client.id).map(v => v.categoryId || v.category_id))];
+  const areas = (Array.isArray(cfg.areas) && cfg.areas.length ? cfg.areas : [...new Set([...DEFAULT_AREAS, ...visitadas])]);
+  return {
+    areas: areas.filter(id => CATEGORIES.some(c => c.id === id)),
+    templates: cfg.templates || {},
+    configured: Array.isArray(cfg.areas) && cfg.areas.length > 0,
+  };
+};
+
+const saveAreasConfig = async (next) => {
+  if (!selClient) return;
+  setClients(prev => prev.map(c => (c.id === selClient.id ? { ...c, areas_config: next } : c)));
+  setSelClient(prev => ({ ...prev, areas_config: next }));
+  try {
+    const { error } = await supabase.from("clients").update({ areas_config: next }).eq("id", selClient.id);
+    if (error && /areas_config/i.test(error.message || "")) {
+      flash("Para guardar las áreas en la nube, corré supabase_migration_areas.sql (SQL Editor)", "error");
+    }
+  } catch (_) {}
+};
+
 // Iniciar una visita nueva de un módulo (desde detalle de cliente o briefing)
 const startNewVisit = (cat) => {
   setSelCat(cat);
   setSelVisit(null);
-  setActiveSections(cat.sections.map(s => s.id)); // todas activas por defecto
+  // Plantilla del área guardada para este tambo; si no hay, todas las secciones
+  const tpl = selClient?.areas_config?.templates?.[cat.id];
+  const tplValid = Array.isArray(tpl) ? tpl.filter(id => cat.sections.some(s => s.id === id)) : null;
+  setActiveSections(tplValid && tplValid.length ? tplValid : cat.sections.map(s => s.id));
   // Cargar visita anterior del mismo módulo para este cliente
   const clientVisits = visits.filter(v => selClient && v.client_id === selClient.id && (v.categoryId || v.category_id) === cat.id);
   const sorted = [...clientVisits].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
@@ -5317,25 +5535,103 @@ const fetchVisits = async (clientId) => {
         );
       })()}
 
-      <h3 style={{ margin: "0 0 12px", fontSize: 18 }}>Nueva visita</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 32 }}>
-        {CATEGORIES.map(cat => (
-          <Card key={cat.id} onClick={() => startNewVisit(cat)} style={{ borderLeft: `4px solid ${cat.color}`, cursor: "pointer" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 8, background: cat.color + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={cat.icon} color={cat.color} /></div>
-              <div>
-                <div style={{ fontWeight: 600 }}>{cat.name}</div>
-                <div style={{ fontSize: 12, color: C.textLight }}>{cat.sections.length} secciones</div>
-              </div>
-              <div style={{ marginLeft: "auto", color: cat.color, fontSize: 18 }}>›</div>
+      {/* ═══ ÁREAS DEL TAMBO ═══ */}
+      {(() => {
+        const { areas, templates } = getAreasConfig(selClient);
+        const hoy = new Date();
+        return (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 0 12px", flexWrap: "wrap" }}>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Áreas del tambo</h3>
+              <button onClick={() => setShowAreaConfig(s => !s)}
+                style={{ background: "none", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: C.textLight, cursor: "pointer", fontFamily: ff }}>
+                ⚙ {showAreaConfig ? "Cerrar" : "Configurar áreas"}
+              </button>
             </div>
-          </Card>
-        ))}
-      </div>
 
-      {/* ═══ ENHANCED VISIT HISTORY ═══ */}
+            {/* Panel de configuración: qué áreas tiene ESTE tambo */}
+            {showAreaConfig && (
+              <Card style={{ marginBottom: 16 }}>
+                <p style={{ margin: "0 0 10px", fontSize: 13, color: C.textLight }}>
+                  Marcá las áreas que existen en este establecimiento. Las visitas y sus informes quedan guardados dentro de cada área.
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {CATEGORIES.map(cat => {
+                    const active = areas.includes(cat.id);
+                    return (
+                      <button key={cat.id} onClick={() => {
+                        const next = active ? areas.filter(a => a !== cat.id) : [...areas, cat.id];
+                        if (!next.length) return flash("El tambo necesita al menos un área", "error");
+                        saveAreasConfig({ ...(selClient.areas_config || {}), areas: next, templates });
+                      }}
+                        style={{
+                          padding: "10px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, fontFamily: ff, cursor: "pointer",
+                          border: `2px solid ${active ? cat.color : C.borderLight}`,
+                          background: active ? cat.color : C.card, color: active ? "#fff" : C.textLight,
+                        }}>
+                        {active ? "✓ " : ""}{cat.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {/* Tarjetas de área con estado */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 12, marginBottom: 32 }}>
+              {areas.map(areaId => {
+                const cat = CATEGORIES.find(c => c.id === areaId);
+                if (!cat) return null;
+                const areaVisits = visits.filter(v => (v.categoryId || v.category_id) === cat.id);
+                const last = areaVisits.map(v => v.fecha).filter(Boolean).sort().pop() || null;
+                const dias = last ? Math.floor((hoy - new Date(last)) / 86400000) : null;
+                const tpl = templates[cat.id];
+                return (
+                  <Card key={cat.id} onClick={() => startNewVisit(cat)} style={{ borderLeft: `4px solid ${cat.color}`, cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 8, background: cat.color + "15", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={cat.icon} color={cat.color} /></div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700 }}>{cat.name}</div>
+                        <div style={{ fontSize: 12, color: dias !== null && dias > (parseInt(selClient.frecuencia_dias) || 45) ? C.danger : C.textLight }}>
+                          {last ? `última: hace ${dias} días` : "sin visitas todavía"}
+                          {areaVisits.length > 0 && ` · ${areaVisits.length} visita${areaVisits.length > 1 ? "s" : ""}`}
+                        </div>
+                        {Array.isArray(tpl) && tpl.length > 0 && (
+                          <div style={{ fontSize: 11, color: cat.color, fontWeight: 600, marginTop: 2 }}>📋 {tpl.length} variables configuradas</div>
+                        )}
+                      </div>
+                      <div style={{ color: cat.color, fontSize: 18, flexShrink: 0 }}>›</div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ═══ HISTORIAL POR ÁREA ═══ */}
+      {visits.length > 0 && (() => {
+        const { areas } = getAreasConfig(selClient);
+        const conVisitas = areas.filter(a => visits.some(v => (v.categoryId || v.category_id) === a));
+        if (conVisitas.length < 2) return null;
+        const chipS = (active, color) => ({
+          padding: "6px 14px", borderRadius: 99, fontSize: 13, fontWeight: 700, fontFamily: ff, cursor: "pointer",
+          border: `1.5px solid ${active ? color : C.borderLight}`,
+          background: active ? color : C.card, color: active ? "#fff" : C.textLight,
+        });
+        return (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <button style={chipS(!histArea, C.primary)} onClick={() => setHistArea(null)}>Todas las áreas</button>
+            {conVisitas.map(a => {
+              const cat = CATEGORIES.find(c => c.id === a);
+              return <button key={a} style={chipS(histArea === a, cat?.color || C.primary)} onClick={() => setHistArea(a)}>{cat?.name || a}</button>;
+            })}
+          </div>
+        );
+      })()}
       <VisitHistoryPanel
-        visits={visits}
+        visits={histArea ? visits.filter(v => (v.categoryId || v.category_id) === histArea) : visits}
         onView={(v, catArg) => {
           const cat = catArg || CATEGORIES.find(c => c.id === (v.categoryId || v.category_id));
           if (!cat) return flash("No se puede identificar el módulo de esta visita", "error");
@@ -5461,6 +5757,7 @@ const fetchVisits = async (clientId) => {
       {/* Resumen */}
       <div style={{ fontSize: 13, color: C.textLight, marginBottom: 20, textAlign: "center" }}>
         {(activeSections || []).length} de {selCat.sections.length} secciones seleccionadas
+        <div style={{ fontSize: 12, marginTop: 4 }}>💾 Esta selección queda guardada como plantilla de {selCat.name} para este tambo.</div>
       </div>
 
       {/* Botón comenzar */}
@@ -5471,6 +5768,9 @@ const fetchVisits = async (clientId) => {
           const exp = {};
           acts.forEach(id => { exp[id] = true; });
           setExpandedSections(exp);
+          // Guardar la selección como plantilla del área para este tambo
+          const cfg = selClient?.areas_config || {};
+          saveAreasConfig({ ...cfg, templates: { ...(cfg.templates || {}), [selCat.id]: acts } });
           setWizardStep(0);
           setVw("newVisit");
         }}
@@ -5861,8 +6161,9 @@ const fetchVisits = async (clientId) => {
     const orden = { alta: 0, media: 1, baja: 2 };
     abiertos.sort((a, b) => (orden[a.prioridad] ?? 1) - (orden[b.prioridad] ?? 1));
 
-    // Módulos ordenados por antigüedad (los que hace más que no se revisan, primero)
-    const modulos = CATEGORIES.map(cat => {
+    // Áreas de ESTE tambo ordenadas por antigüedad (las que hace más que no se revisan, primero)
+    const areasTambo = getAreasConfig(selClient).areas;
+    const modulos = CATEGORIES.filter(cat => areasTambo.includes(cat.id)).map(cat => {
       const v = ultimaPorCat[cat.id];
       const dias = v ? Math.floor((hoy - new Date(v.fecha)) / 86400000) : null;
       return { cat, dias, fecha: v?.fecha || null };
