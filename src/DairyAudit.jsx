@@ -174,6 +174,22 @@ const useIsMobile = () => {
   return m;
 };
 
+// ── Utilidades offline ──
+const cacheSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+const cacheGet = (k) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (_) { return null; } };
+const isNetworkError = (e) => (typeof navigator !== "undefined" && !navigator.onLine) || /fetch|network|load failed|conexión/i.test(e?.message || "");
+
+const useOnline = () => {
+  const [on, setOn] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  useEffect(() => {
+    const up = () => setOn(true), down = () => setOn(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+  }, []);
+  return on;
+};
+
 // ─── Base Components ───
 const Btn = ({ children, onClick, variant = "primary", size = "md", icon, disabled, style: sx, ...r }) => {
   const vars = {
@@ -3855,6 +3871,8 @@ export default function DairyAuditApp() {
   const [wizardStep, setWizardStep] = useState(0);       // paso actual del wizard de visita
   const navRestoredRef = useRef(false);                  // evita restaurar más de una vez por sesión
   const isMobile = useIsMobile();                        // layout compacto en celular
+  const isOnline = useOnline();                          // estado de conexión
+  const [pendingSync, setPendingSync] = useState(0);     // visitas en cola offline por sincronizar
 
   // Clave única de borrador por usuario/cliente/módulo
   const draftKey = user && selClient && selCat
@@ -3915,15 +3933,26 @@ useEffect(() => {
 useEffect(() => {
   if (!user) return;
   (async () => {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("owner_id", user.id)
-      .order("nombre", { ascending: true });
-
-    if (error) return flash(error.message, "error");
-    setClients(data || []);
-    setClientsLoaded(true);
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("owner_id", user.id)
+        .order("nombre", { ascending: true });
+      if (error) throw error;
+      setClients(data || []);
+      setClientsLoaded(true);
+      cacheSet(`dairy_cache_clients_${user.id}`, data || []);
+    } catch (e) {
+      // Sin conexión: usar la última copia local
+      const cached = cacheGet(`dairy_cache_clients_${user.id}`);
+      if (cached) {
+        setClients(cached);
+        setClientsLoaded(true);
+      } else if (!isNetworkError(e)) {
+        flash(e.message, "error");
+      }
+    }
   })();
 }, [user]);
 
@@ -3933,27 +3962,44 @@ useEffect(() => {
   if (!user || !selClient) return;
 
   (async () => {
-    const { data, error } = await supabase
-      .from("visits")
-      .select("*")
-      .eq("client_id", selClient.id)
-      .order("fecha", { ascending: false });
-
-    if (error) return flash(error.message, "error");
-    setVisits(data || []);
+    // Visitas guardadas offline (todavía sin sincronizar) de este cliente
+    const pend = (cacheGet(`dairy_outbox_${user.id}`) || [])
+      .filter(o => !o.targetId && o.payload?.client_id === selClient.id)
+      .map(o => ({ ...o.payload, id: o.tmpId, _pending: true }));
+    try {
+      const { data, error } = await supabase
+        .from("visits")
+        .select("*")
+        .eq("client_id", selClient.id)
+        .order("fecha", { ascending: false });
+      if (error) throw error;
+      setVisits([...pend, ...(data || [])]);
+      cacheSet(`dairy_cache_visits_${selClient.id}`, data || []);
+    } catch (e) {
+      const cached = cacheGet(`dairy_cache_visits_${selClient.id}`);
+      if (cached) setVisits([...pend, ...cached]);
+      else if (!isNetworkError(e)) flash(e.message, "error");
+      else setVisits(pend);
+    }
   })();
 }, [user, selClient, vw]);
 
 useEffect(() => {
   if ((vw !== "informes" && vw !== "dashboard") || !user) return;
   (async () => {
-    const { data, error } = await supabase
-      .from("visits").select("*")
-      .order("fecha", { ascending: true });
-    if (!error && data) {
-      setAllVisitsCache(data.map(v => ({
+    try {
+      const { data, error } = await supabase
+        .from("visits").select("*")
+        .order("fecha", { ascending: true });
+      if (error) throw error;
+      const mapped = (data || []).map(v => ({
         ...v, clientId: v.client_id, categoryId: v.category_id,
-      })));
+      }));
+      setAllVisitsCache(mapped);
+      cacheSet(`dairy_cache_allvisits_${user.id}`, mapped);
+    } catch (_) {
+      const cached = cacheGet(`dairy_cache_allvisits_${user.id}`);
+      if (cached) setAllVisitsCache(cached);
     }
   })();
 }, [vw, user]);
@@ -4360,8 +4406,35 @@ const saveVisit = async () => {
     ? supabase.from("visits").update(payload).eq("id", selVisit.id)
     : supabase.from("visits").insert(payload);
 
-  const { error } = await q;
-  if (error) return flash(error.message, "error");
+  let error = null;
+  try { ({ error } = await q); } catch (e) { error = e; }
+
+  if (error) {
+    // Sin señal: guardar en cola local y seguir trabajando
+    if (isNetworkError(error)) {
+      const outKey = `dairy_outbox_${user.id}`;
+      const box = cacheGet(outKey) || [];
+      const tmpId = "tmp_" + Date.now().toString(36);
+      box.push({ tmpId, targetId: selVisit?.id || null, payload });
+      cacheSet(outKey, box);
+      setPendingSync(box.length);
+      // Reflejar localmente para que se vea en el historial
+      if (selVisit?.id) {
+        setVisits(prev => prev.map(v => v.id === selVisit.id ? { ...v, ...payload, _pending: true } : v));
+      } else {
+        setVisits(prev => [{ ...payload, id: tmpId, _pending: true }, ...prev]);
+      }
+      flash("Sin señal: visita guardada en el dispositivo — se sincroniza sola al volver la conexión");
+      if (draftKey) { try { localStorage.removeItem(draftKey); } catch (_) {} }
+      setDraftBanner(false);
+      setDraftSavedAt(null);
+      setFormData({});
+      setSelVisit(null);
+      setVw("clientDetail");
+      return;
+    }
+    return flash(error.message, "error");
+  }
 
   flash("Visita guardada");
   // Limpiar borrador de localStorage
@@ -4372,6 +4445,54 @@ const saveVisit = async () => {
   setSelVisit(null);
   setVw("clientDetail");
 };
+
+// ── Sincronizar visitas guardadas sin conexión ──
+const syncOutbox = async () => {
+  if (!user) return;
+  const outKey = `dairy_outbox_${user.id}`;
+  const box = cacheGet(outKey) || [];
+  setPendingSync(box.length);
+  if (!box.length || !navigator.onLine) return;
+
+  const rest = [];
+  let ok = 0;
+  for (const item of box) {
+    try {
+      const q = item.targetId
+        ? supabase.from("visits").update(item.payload).eq("id", item.targetId)
+        : supabase.from("visits").insert(item.payload);
+      const { error } = await q;
+      if (error) throw error;
+      ok++;
+    } catch (_) {
+      rest.push(item); // sigue pendiente para el próximo intento
+    }
+  }
+  cacheSet(outKey, rest);
+  setPendingSync(rest.length);
+  if (ok > 0) {
+    flash(`✓ ${ok} visita${ok > 1 ? "s" : ""} sincronizada${ok > 1 ? "s" : ""}`);
+    // refrescar el listado del cliente actual (reemplaza las temporales)
+    if (selClient) {
+      try {
+        const { data } = await supabase.from("visits").select("*")
+          .eq("client_id", selClient.id).order("fecha", { ascending: false });
+        if (data) { setVisits(data); cacheSet(`dairy_cache_visits_${selClient.id}`, data); }
+      } catch (_) {}
+    }
+  }
+};
+const syncRef = useRef(null);
+syncRef.current = syncOutbox;
+
+useEffect(() => {
+  if (!user) return;
+  syncRef.current(); // intento al entrar / iniciar sesión
+  const h = () => syncRef.current && syncRef.current();
+  window.addEventListener("online", h);
+  const t = setInterval(h, 60000); // reintento suave cada minuto
+  return () => { window.removeEventListener("online", h); clearInterval(t); };
+}, [user]);
 
 // Iniciar una visita nueva de un módulo (desde detalle de cliente o briefing)
 const startNewVisit = (cat) => {
@@ -4398,6 +4519,7 @@ const startNewVisit = (cat) => {
 const deleteVisit = async (v) => {
   if (!user) return;
   if (!v?.id) return flash("Visita inválida", "error");
+  if (v._pending || String(v.id).startsWith("tmp_")) return flash("Esta visita todavía no se sincronizó — esperá a tener señal", "error");
   if (!confirm("¿Eliminar esta visita?")) return;
 
   const { error } = await supabase
@@ -4654,6 +4776,16 @@ const Toast = msg && (
       </div>
       {/* User + logout */}
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, flexShrink: 0 }}>
+        {(!isOnline || pendingSync > 0) && (
+          <div title={!isOnline ? "Sin conexión: podés seguir cargando, se sincroniza al volver la señal" : "Visitas guardadas en el dispositivo esperando conexión"}
+            style={{
+              background: !isOnline ? "rgba(196,43,43,0.9)" : "rgba(204,138,0,0.95)",
+              color: "#fff", borderRadius: 20, padding: "4px 10px",
+              fontSize: 11, fontWeight: 800, flexShrink: 0, whiteSpace: "nowrap",
+            }}>
+            {!isOnline ? "📴 sin señal" : `⏳ ${pendingSync}`}
+          </div>
+        )}
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
           background: "rgba(255,255,255,0.13)", borderRadius: 22,
@@ -5143,6 +5275,7 @@ const fetchVisits = async (clientId) => {
         onEdit={(v, catArg) => {
           const cat = catArg || CATEGORIES.find(c => c.id === (v.categoryId || v.category_id));
           if (!cat) return flash("No se puede identificar el módulo de esta visita", "error");
+          if (v._pending) return flash("Esta visita está pendiente de sincronizar — editala cuando vuelva la señal", "error");
           setSelVisit(v); setSelCat(cat);
           setFormData({ _fecha: v.fecha, ...v.data });
           const exp = {}; (cat.sections || []).forEach(s => { exp[s.id] = true; }); setExpandedSections(exp);
