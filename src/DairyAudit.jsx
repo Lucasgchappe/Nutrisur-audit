@@ -1595,7 +1595,7 @@ const DiseaseTracker = ({ value = {}, onChange, readOnly }) => {
         </table>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-        <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Mortalidad 0-60 DIM</label>{readOnly ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, border: `1px solid ${C.borderLight}` }}>{value.mortalidad || "—"}</div> : <input type="text" value={value.mortalidad || ""} onChange={e => onChange({ ...value, mortalidad: e.target.value })} placeholder="Ej: 2/40 = 5%" style={inputStyle} />}</div>
+        <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Mortandad 0-60 DIM</label>{readOnly ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, border: `1px solid ${C.borderLight}` }}>{value.mortalidad || "—"}</div> : <input type="text" value={value.mortalidad || ""} onChange={e => onChange({ ...value, mortalidad: e.target.value })} placeholder="Ej: 2/40 = 5%" style={inputStyle} />}</div>
         <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Descartes 0-60 DIM</label>{readOnly ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, border: `1px solid ${C.borderLight}` }}>{value.descartes || "—"}</div> : <input type="text" value={value.descartes || ""} onChange={e => onChange({ ...value, descartes: e.target.value })} placeholder="Ej: 3/40 = 7.5%" style={inputStyle} />}</div>
         <div><label style={{ fontSize: 13, fontWeight: 600, color: C.textLight, display: "block", marginBottom: 4 }}>Días a 1ª IA</label>{readOnly ? <div style={{ padding: "8px 12px", background: C.inputBg, borderRadius: 8, border: `1px solid ${C.borderLight}` }}>{value.dias_1ia || "—"}</div> : <input type="text" value={value.dias_1ia || ""} onChange={e => onChange({ ...value, dias_1ia: e.target.value })} placeholder="Ej: 65 DIM" style={inputStyle} />}</div>
       </div>
@@ -2108,14 +2108,14 @@ const PRODUCCION_SECTIONS = [
 // ═══════════════════════════════════════════════════
 const GUACHERA_SECTIONS = [
   {
-    id: "ga_calostro", title: "1. Encalostrado", subtitle: "Cantidad, calidad y oportunidad del calostro",
+    id: "ga_calostro", title: "1. Calostrado", subtitle: "Cantidad, calidad y oportunidad del calostro",
     fields: [
       { id: "ga_cal_pct_6h", label: "% terneras con calostro en <6 h", type: "number", placeholder: "Ej: 85", unit: "%" },
       { id: "ga_cal_litros", label: "Litros en la primera toma", type: "number", step: "0.5", placeholder: "Ej: 4", unit: "lt" },
       { id: "ga_cal_metodo", label: "Método de suministro", type: "select", options: ["Mamadera", "Sonda esofágica", "Mama directo", "Mixto"] },
       { id: "ga_cal_calidad", label: "¿Se mide calidad del calostro?", type: "select", options: ["Brix", "Calostrómetro", "No se mide"] },
       { id: "ga_cal_brix", label: "Brix promedio (si se mide)", type: "number", step: "0.5", placeholder: "Ej: 23", unit: "%" },
-      { id: "ga_cal_obs", label: "Observaciones encalostrado", type: "textarea", placeholder: "Rutina, refrigeración/banco de calostro, quién lo hace..." },
+      { id: "ga_cal_obs", label: "Observaciones calostrado", type: "textarea", placeholder: "Rutina, refrigeración/banco de calostro, quién lo hace..." },
     ],
   },
   {
@@ -2275,6 +2275,64 @@ const ORDENE_SECTIONS = [
   },
 ];
 
+// ═══════════════════════════════════════════════════
+// GESTIÓN — indicadores del sistema de gestión (formato CREA)
+// Datos que vienen de DairyComp / carpeta CREA / planillas del tambo.
+// Cargarlos acá permite seguirlos con tendencia y sacarlos en el informe.
+// ═══════════════════════════════════════════════════
+const GESTION_SECTIONS = [
+  {
+    id: "ge_leche", title: "1. Leche del mes", subtitle: "Del remito / sistema de gestión",
+    fields: [
+      { id: "ge_le_litros", label: "Litros producidos en el mes", type: "number", placeholder: "Ej: 202314", unit: "lt" },
+      { id: "ge_le_vo", label: "Vacas en ordeñe (promedio)", type: "number", placeholder: "Ej: 230", unit: "VO" },
+      { id: "ge_le_secas", label: "Vacas secas", type: "number", placeholder: "Ej: 28", unit: "vacas" },
+      { id: "ge_le_lvod", label: "Litros / VO / día", type: "number", step: "0.1", placeholder: "Ej: 29.3", unit: "lt/VO/d" },
+      { id: "ge_le_precio", label: "Precio de la leche", type: "number", step: "0.001", placeholder: "Ej: 0.395", unit: "U$S/lt" },
+      { id: "ge_le_obs", label: "Observaciones", type: "textarea", placeholder: "Estacionalidad, partos del mes, pico previsto..." },
+    ],
+  },
+  {
+    id: "ge_dieta", title: "2. Dieta y eficiencia global", subtitle: "Composición en kg MS/VO/día (formato CREA)",
+    fields: [
+      { id: "ge_di_forraje", label: "Forraje (pastoreo)", type: "number", step: "0.1", placeholder: "Ej: 6.9", unit: "kg MS/VO/d" },
+      { id: "ge_di_racion", label: "Ración / concentrado", type: "number", step: "0.1", placeholder: "Ej: 8.9", unit: "kg MS/VO/d" },
+      { id: "ge_di_silo", label: "Silo", type: "number", step: "0.1", placeholder: "Ej: 6.3", unit: "kg MS/VO/d" },
+      { id: "ge_di_heno", label: "Heno / fardo", type: "number", step: "0.1", placeholder: "Ej: 0.9", unit: "kg MS/VO/d" },
+      { id: "ge_di_ltkgms", label: "Litros / kg MS (objetivo >1.1)", type: "number", step: "0.01", placeholder: "Ej: 1.18", unit: "lt/kg MS" },
+      { id: "ge_di_grms", label: "Ración por litro (objetivo <350)", type: "number", placeholder: "Ej: 326", unit: "gr MS/lt" },
+      { id: "ge_di_obs", label: "Observaciones dieta", type: "textarea", placeholder: "Cambios de dieta del mes, costo ración..." },
+    ],
+  },
+  {
+    id: "ge_repro", title: "3. Reproducción", subtitle: "Indicadores con metas CREA",
+    fields: [
+      { id: "ge_re_iip", label: "Intervalo interparto (meta <13)", type: "number", step: "0.1", placeholder: "Ej: 14.6", unit: "meses" },
+      { id: "ge_re_ppc", label: "Intervalo parto-concepción (meta 90)", type: "number", placeholder: "Ej: 159", unit: "días" },
+      { id: "ge_re_serv", label: "Servicios por concepción (meta 1.8)", type: "number", step: "0.1", placeholder: "Ej: 2.6" },
+      { id: "ge_re_prenez", label: "% preñez sobre ofrecido (meta 90%)", type: "number", placeholder: "Ej: 76", unit: "%" },
+      { id: "ge_re_prenez1", label: "% preñez al 1er servicio (meta 50%)", type: "number", placeholder: "Ej: 47", unit: "%" },
+      { id: "ge_re_edad1p", label: "Edad al 1er parto (meta <27)", type: "number", step: "0.1", placeholder: "Ej: 28.3", unit: "meses" },
+      { id: "ge_re_obs", label: "Observaciones reproducción", type: "textarea", placeholder: "Detección de celos, protocolos, toros/IA..." },
+    ],
+  },
+  {
+    id: "ge_salidas", title: "4. Mortandad y descartes", subtitle: "Con metas CREA",
+    fields: [
+      { id: "ge_sa_mort_tern", label: "Mortandad terneros (meta <7%)", type: "number", step: "0.1", placeholder: "Ej: 23", unit: "%" },
+      { id: "ge_sa_mort_adult", label: "Mortandad adultos (meta <5%)", type: "number", step: "0.1", placeholder: "Ej: 7.8", unit: "%" },
+      { id: "ge_sa_descartes", label: "Descartes % vaca masa (meta <25%)", type: "number", step: "0.1", placeholder: "Ej: 29.6", unit: "%" },
+      { id: "ge_sa_obs", label: "Observaciones", type: "textarea", placeholder: "Causas principales: reproducción, enfermas, selección..." },
+    ],
+  },
+  {
+    id: "ge_plan", title: "5. Observaciones y plan", subtitle: "Síntesis de gestión",
+    fields: [
+      { id: "ge_hallazgos", label: "Hallazgos principales", type: "textarea", rows: 4, placeholder: "Lectura de los números del mes: qué explica la recorrida..." },
+    ],
+  },
+];
+
 const CATEGORIES = [
   // Ordenadas según etapa productiva del tambo
   { id: "guachera", name: "Guachera", icon: "cow", color: "#B45309", sections: GUACHERA_SECTIONS },
@@ -2286,6 +2344,7 @@ const CATEGORIES = [
   { id: "calidad_cama", name: "Calidad de Cama", icon: "thermo", color: "#7C3AED", sections: CALIDAD_CAMA_SECTIONS },
   { id: "calidad_alimento", name: "Calidad Alimento / Grano", icon: "layers", color: "#0891B2", sections: CALIDAD_ALIMENTO_SECTIONS },
   { id: "estres_calorico", name: "Verano / Estrés Calórico", icon: "sun", color: "#DC2626", sections: ESTRES_CALORICO_SECTIONS },
+  { id: "gestion", name: "Gestión (datos del sistema)", icon: "chart", color: "#475569", sections: GESTION_SECTIONS },
 ];
 
 // Áreas que se activan por defecto en un tambo nuevo
@@ -2294,6 +2353,7 @@ const DEFAULT_AREAS = ["preparto", "frescas", "produccion"];
 // Secciones esenciales por módulo — preset "Visita rápida"
 // (lo que se mide SIEMPRE para mantener tendencias comparables entre visitas)
 const CORE_SECTIONS = {
+  gestion: ["ge_leche", "ge_dieta", "ge_plan"],
   guachera: ["ga_leche", "ga_salud", "ga_plan"],
   recria: ["rc_crecimiento", "rc_dieta", "rc_plan"],
   ordene: ["or_rutina", "or_calidad", "or_plan"],
@@ -2933,7 +2993,7 @@ const generateTextReport = (visit, client, category) => {
         ["da", "hipocalcemia", "rp", "metritis", "cetosis_cl", "mastitis", "neumonia", "cojera"].forEach(dis => {
           if (d[`${dis}_casos`]) txt += `    ${dis}: ${d[`${dis}_casos`]} casos → ${d[`${dis}_incidencia`] || "?"}% | Reincid: ${d[`${dis}_reincid`] || 0} | ${d[`${dis}_protocolo`] || ""}\n`;
         });
-        txt += `  Mortalidad: ${d.mortalidad || "-"} | Descartes: ${d.descartes || "-"} | 1ª IA: ${d.dias_1ia || "-"}\n`;
+        txt += `  Mortandad: ${d.mortalidad || "-"} | Descartes: ${d.descartes || "-"} | 1ª IA: ${d.dias_1ia || "-"}\n`;
         if (d.obs_salud) txt += `  Obs: ${d.obs_salud}\n`;
         txt += "\n";
       }
@@ -3515,6 +3575,18 @@ const METRICS = [
   { id: "metritis",       label: "Metritis %",                unit: "%",   ref: [0, 10],      cat: "frescas",         extract: (v) => { const x = parseFloat(v.data?.fr_enfermedades_diseases?.metritis_incidencia); return isNaN(x) ? null : x; } },
   { id: "rp",             label: "Retención de placenta %",   unit: "%",   ref: [0, 8],       cat: "frescas",         extract: (v) => { const x = parseFloat(v.data?.fr_enfermedades_diseases?.rp_incidencia); return isNaN(x) ? null : x; } },
   { id: "hipocalcemia",   label: "Hipocalcemia %",            unit: "%",   ref: [0, 5],       cat: "frescas",         extract: (v) => { const x = parseFloat(v.data?.fr_enfermedades_diseases?.hipocalcemia_incidencia); return isNaN(x) ? null : x; } },
+
+  // ── Gestión: indicadores del sistema (formato CREA, con sus metas) ──
+  { id: "ge_lvod",        label: "Litros / VO / día",         unit: "lt",  ref: null,         cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_le_lvod); return isNaN(x) ? null : x; } },
+  { id: "ge_ltkgms",      label: "Litros / kg MS (global)",   unit: "",    ref: [1.1, 2.0],   cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_di_ltkgms); return isNaN(x) ? null : x; } },
+  { id: "ge_grms",        label: "Ración gr MS / litro",      unit: "gr",  ref: [0, 350],     cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_di_grms); return isNaN(x) ? null : x; } },
+  { id: "ge_iip",         label: "Intervalo interparto",      unit: "m",   ref: [0, 13],      cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_re_iip); return isNaN(x) ? null : x; } },
+  { id: "ge_prenez",      label: "Preñez s/ofrecido %",       unit: "%",   ref: [90, 100],    cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_re_prenez); return isNaN(x) ? null : x; } },
+  { id: "ge_prenez1",     label: "Preñez 1er servicio %",     unit: "%",   ref: [50, 100],    cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_re_prenez1); return isNaN(x) ? null : x; } },
+  { id: "ge_edad1p",      label: "Edad al 1er parto",         unit: "m",   ref: [0, 27],      cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_re_edad1p); return isNaN(x) ? null : x; } },
+  { id: "ge_mort_tern",   label: "Mortandad terneros %",      unit: "%",   ref: [0, 7],       cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_sa_mort_tern); return isNaN(x) ? null : x; } },
+  { id: "ge_mort_adult",  label: "Mortandad adultos %",       unit: "%",   ref: [0, 5],       cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_sa_mort_adult); return isNaN(x) ? null : x; } },
+  { id: "ge_descartes",   label: "Descartes % vaca masa",     unit: "%",   ref: [0, 25],      cat: "gestion",         extract: (v) => { const x = parseFloat(v.data?.ge_sa_descartes); return isNaN(x) ? null : x; } },
 ];
 
 const CLIENT_COLORS = ["#1565C0","#E76F51","#2D9CDB","#27AE60","#9B51E0","#F2994A","#EB5757","#0F766E"];
@@ -4582,6 +4654,7 @@ const handlePortalLogout = () => {
       email: clientForm.email || null,
       sistema_productivo: clientForm.sistema_productivo || null,
       frecuencia_dias: clientForm.frecuencia_dias ? parseInt(clientForm.frecuencia_dias) : null,
+      sistema_gestion: clientForm.sistema_gestion || null,
     };
 
     const run = (p) =>
@@ -4593,7 +4666,7 @@ const handlePortalLogout = () => {
 
     // Si alguna columna nueva no existe aún en la base, reintentar sin ella
     // (correr supabase_migration_clients.sql y supabase_migration_frecuencia.sql para habilitarlas)
-    for (const col of ["sistema_productivo", "frecuencia_dias"]) {
+    for (const col of ["sistema_productivo", "frecuencia_dias", "sistema_gestion"]) {
       if (error && new RegExp(col, "i").test(error.message || "")) {
         delete payload[col];
         ({ data, error } = await run(payload));
@@ -5383,6 +5456,18 @@ const Toast = msg && (
               <option value="90">Trimestral (cada 90 días)</option>
             </select>
             <p style={{ fontSize: 12, color: C.textLight, margin: "4px 0 0" }}>Se usa para la agenda de próximas visitas en el inicio.</p>
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Sistema de gestión del tambo</label>
+            <select value={clientForm.sistema_gestion || ""} onChange={e => setClientForm({ ...clientForm, sistema_gestion: e.target.value })} style={inputStyle}>
+              <option value="">— Ninguno / no sabe —</option>
+              <option value="DairyComp 305">DairyComp 305</option>
+              <option value="Carpeta CREA">Carpeta CREA (FUCREA)</option>
+              <option value="Lechero SM">Lechero SM</option>
+              <option value="Planillas propias">Planillas propias (Excel)</option>
+              <option value="Otro">Otro</option>
+            </select>
+            <p style={{ fontSize: 12, color: C.textLight, margin: "4px 0 0" }}>Si tiene sistema, el área "Gestión" permite cargar sus indicadores del mes y seguirlos con tendencia.</p>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.borderLight}` }}>
